@@ -1,0 +1,5 @@
+<library path="lib/libpos_controller_biped_lib">
+  <class name="pos_controller_biped/GrpPosController"
+	  type="pos_controller_biped_ns::GrpPosController"
+	  base_class_type="controller_interface::ControllerBase" />
+</library>
