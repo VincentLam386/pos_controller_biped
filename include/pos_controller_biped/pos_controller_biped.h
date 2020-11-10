@@ -50,6 +50,10 @@
 #include <std_msgs/Float64MultiArray.h>
 #include <urdf/model.h>
 #include <pos_controller_biped/control_algo.h>
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2/LinearMath/Quaternion.h>
+
+
 
 namespace pos_controller_biped_ns
 {
@@ -97,6 +101,9 @@ private:
 
   void commandCB(const std_msgs::Float64MultiArrayConstPtr& msg);
   void enforceJointLimits(double &command, unsigned int index);
+
+
+  std::vector<hardware_interface::ImuSensorHandle> sensors_;
 }; // class
 
 } // namespace
