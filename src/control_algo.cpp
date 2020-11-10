@@ -1,5 +1,5 @@
 #include "pos_controller_biped/control_algo.h"
-
+#include <ros/console.h>
 // Implement the control algorithm here
 void update_control(int loop_count_,std::vector<double>& commands, const std::vector<hardware_interface::JointHandle>& joints_, ros::Time time){
   // loop_count_: number of loops passed in simulation (may not be needed 
@@ -16,6 +16,7 @@ void update_control(int loop_count_,std::vector<double>& commands, const std::ve
 //  int div = commands.size()/2;
  // commands[0] = 0.3 * sin( (double)(loop_count_/500.0));
  // commands[1] = -0.3 * sin( (double)(loop_count_/500.0));
+  ROS_DEBUG("Hello World from Controoller");
   const float offset = 0.4;
   const float stepFrequency = 3;
 

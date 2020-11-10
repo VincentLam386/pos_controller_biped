@@ -39,6 +39,7 @@
 #include <pluginlib/class_list_macros.hpp>
 #include <angles/angles.h>
 
+
 namespace pos_controller_biped_ns
 {
 
@@ -58,8 +59,12 @@ namespace pos_controller_biped_ns
   GrpPosController::GrpPosController(): loop_count_(0) {}
   GrpPosController::~GrpPosController() {sub_command_.shutdown();}
 
-  bool GrpPosController::init(hardware_interface::EffortJointInterface* hw, ros::NodeHandle &n)
+  bool GrpPosController::init(hardware_interface::RobotHW* robot_hw, ros::NodeHandle &n)
   {
+
+
+    hardware_interface::EffortJointInterface* eff = robot_hw->get<hardware_interface::EffortJointInterface>();
+    hardware_interface::ImuSensorInterface* imu = robot_hw->get<hardware_interface::ImuSensorInterface>();
     // List of controlled joints
     if(!n.getParam("joints", joint_names_))
     {
@@ -89,7 +94,7 @@ namespace pos_controller_biped_ns
 
       try
       {
-        joints_.push_back(hw->getHandle(joint_name));
+        joints_.push_back(eff->getHandle(joint_name));
       }
       catch (const hardware_interface::HardwareInterfaceException& e)
       {
