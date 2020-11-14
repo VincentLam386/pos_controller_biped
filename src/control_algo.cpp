@@ -27,16 +27,18 @@ void update_control(int loop_count_,std::vector<double>& commands, const std::ve
   float targetLeftLegLength = retractionLength < 0? (leg_0 + retractionLength) : leg_0;
   float targetRightLegLength = retractionLength > 0? (leg_0 - retractionLength) : leg_0;
 
-  float targetLeftLegAngle= 0;
-  float targetRightLegAngle= 0;
+  //float targetLeftLegAngle= sin(time.toSec());
+  float targetLeftLegAngle = 0;
+  //float targetRightLegAngle= -sin(time.toSec());
+  float targetRightLegAngle = 0;
 
-  float tempAngle = acos((targetLeftLegLength/2)/(0.26)); 
-  float targetLeftBottomLinkAngle = 2 * tempAngle;  
-  float targetLeftTopLinkAngle = targetLeftLegAngle - tempAngle;
+  float leftAngle = acos((targetLeftLegLength/2)/(0.26)); 
+  float targetLeftBottomLinkAngle = 2 * leftAngle;  
+  float targetLeftTopLinkAngle = targetLeftLegAngle - leftAngle;
 
-  tempAngle = acos((targetRightLegLength/2)/(0.26)); 
-  float targetRightBottomLinkAngle = 2 * tempAngle;
-  float targetRightTopLinkAngle = targetRightLegAngle - tempAngle;
+  float rightAngle = acos((targetRightLegLength/2)/(0.26)); 
+  float targetRightBottomLinkAngle = 2 * rightAngle;
+  float targetRightTopLinkAngle = targetRightLegAngle - rightAngle;
 
 
 
@@ -48,17 +50,30 @@ void update_control(int loop_count_,std::vector<double>& commands, const std::ve
   commands[1] = 0;
 
   // left top joint
-  commands[2] = targetLeftTopLinkAngle;
+  commands[2] = -targetLeftTopLinkAngle;
   
   // left bottom joint
-  commands[3] = targetLeftBottomLinkAngle;
-  //commands[3] = 0;
+  commands[3] = -targetLeftBottomLinkAngle;
+
+  // left front top joint
+  commands[4] = -targetLeftLegAngle - leftAngle;
+  //commands[4] = 0;
+
+  // left front bottom joint
+  commands[5] = targetLeftBottomLinkAngle;
+  //commands[5] = 0;
 
   // right top joint
-  commands[4] = targetRightTopLinkAngle;
+  commands[6] = -targetRightTopLinkAngle;
 
   // right bottom joint
-  commands[5] = targetRightBottomLinkAngle;
+  commands[7] = -targetRightBottomLinkAngle;
+
+  // right front top joint
+  commands[8] = -targetRightLegAngle - rightAngle;
+
+  // right front bottom joint
+  commands[9] = targetRightBottomLinkAngle;
 
 //  for (int i=0;i<div;++i){
 //    commands[i] =0.3 * sin( (double)(loop_count_/500.0)); 
