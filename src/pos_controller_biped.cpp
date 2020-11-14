@@ -39,6 +39,7 @@
 #include <pluginlib/class_list_macros.hpp>
 #include <angles/angles.h>
 
+
 namespace pos_controller_biped_ns
 {
 
@@ -58,8 +59,28 @@ namespace pos_controller_biped_ns
   GrpPosController::GrpPosController(): loop_count_(0) {}
   GrpPosController::~GrpPosController() {sub_command_.shutdown();}
 
-  bool GrpPosController::init(hardware_interface::EffortJointInterface* hw, ros::NodeHandle &n)
+  bool GrpPosController::init(hardware_interface::RobotHW* robot_hw, ros::NodeHandle &n)
   {
+
+
+    hardware_interface::EffortJointInterface* eff = robot_hw->get<hardware_interface::EffortJointInterface>();
+    hardware_interface::ImuSensorInterface* imu = robot_hw->get<hardware_interface::ImuSensorInterface>();
+
+
+
+    //IMU Portion
+    const std::vector<std::string>& sensor_names = imu->getNames();
+    for (unsigned i=0; i<sensor_names.size(); i++)
+      ROS_DEBUG("Got sensor %s", sensor_names[i].c_str());
+
+    for (unsigned i=0; i<sensor_names.size(); i++){
+      // sensor handle
+      sensors_.push_back(imu->getHandle(sensor_names[i]));
+    }
+
+
+
+
     // List of controlled joints
     if(!n.getParam("joints", joint_names_))
     {
@@ -89,7 +110,7 @@ namespace pos_controller_biped_ns
 
       try
       {
-        joints_.push_back(hw->getHandle(joint_name));
+        joints_.push_back(eff->getHandle(joint_name));
       }
       catch (const hardware_interface::HardwareInterfaceException& e)
       {
@@ -174,6 +195,32 @@ namespace pos_controller_biped_ns
 
         joints_[i].setCommand(commanded_effort);
     }
+
+
+   //IMU Portion
+   if (sensors_[0].getOrientation()){
+	   /*ROS_INFO_STREAM("Orientation X,Y,Z,W = "	<< sensors_[0].getOrientation()[0] <<", "
+							<< sensors_[0].getOrientation()[1] <<", "
+							<< sensors_[0].getOrientation()[2] <<", "
+							<< sensors_[0].getOrientation()[3] <<", "
+	   );*/
+	double roll,pitch,yaw;
+	tf2::Quaternion quat{	sensors_[0].getOrientation()[0],
+				sensors_[0].getOrientation()[1], 
+				sensors_[0].getOrientation()[2], 
+				sensors_[0].getOrientation()[3], 
+				};
+
+	tf2::Matrix3x3(quat).getRPY(roll,pitch,yaw);
+	
+	ROS_INFO_STREAM("Orientation RPY = "	<< roll*(180.0/3.14159)<<", "<<pitch*(180.0/3.14159)<<", "<<yaw*(180.0/3.14159));
+	
+   }
+   else{
+	ROS_WARN("No Orientation Data");
+   }	
+
+
     ++loop_count_;
   }
 

@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   realtime_tools
   roscpp
   std_msgs
+  tf2
 )
 
 ## System dependencies are found with CMake's conventions
@@ -111,7 +112,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS angles control_msgs control_toolbox controller_interface hardware_interface pluginlib realtime_tools roscpp std_msgs
+  CATKIN_DEPENDS angles control_msgs control_toolbox controller_interface hardware_interface pluginlib realtime_tools roscpp std_msgs tf2
 #  DEPENDS system_lib
 )
 

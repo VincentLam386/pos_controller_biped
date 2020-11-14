@@ -40,14 +40,20 @@
 
 #include <control_msgs/JointControllerState.h>
 #include <control_toolbox/pid.h>
-#include <controller_interface/controller.h>
+#include <controller_interface/controller.h>   //This might not be needed anymore
+#include <controller_interface/multi_interface_controller.h>
 #include <hardware_interface/joint_command_interface.h>
+#include <hardware_interface/imu_sensor_interface.h>
 #include <realtime_tools/realtime_buffer.h>
 #include <realtime_tools/realtime_publisher.h>
 #include <ros/node_handle.h>
 #include <std_msgs/Float64MultiArray.h>
 #include <urdf/model.h>
 #include <pos_controller_biped/control_algo.h>
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2/LinearMath/Quaternion.h>
+
+
 
 namespace pos_controller_biped_ns
 {
@@ -65,7 +71,8 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-class GrpPosController : public controller_interface::Controller<hardware_interface::EffortJointInterface>
+class GrpPosController : public controller_interface::MultiInterfaceController<hardware_interface::EffortJointInterface,
+									       hardware_interface::ImuSensorInterface>
 {
 public:
   GrpPosController();
@@ -73,7 +80,9 @@ public:
 
 //  void update_control(std::vector<double>& command);
 
-  bool init(hardware_interface::EffortJointInterface* hw, ros::NodeHandle &n);
+  //bool init(hardware_interface::EffortJointInterface* hw, ros::NodeHandle &n); //Old init function before MultiInterfaceController is used
+
+  bool init(hardware_interface::RobotHW* robot_hw, ros::NodeHandle &n); //Init of MultiInterfaceController takes a RobotHW fist argument.
   void update(const ros::Time& /*time*/, const ros::Duration& /*period*/);
   void starting(const ros::Time& /*time*/);
 
@@ -92,6 +101,9 @@ private:
 
   void commandCB(const std_msgs::Float64MultiArrayConstPtr& msg);
   void enforceJointLimits(double &command, unsigned int index);
+
+
+  std::vector<hardware_interface::ImuSensorHandle> sensors_;
 }; // class
 
 } // namespace
