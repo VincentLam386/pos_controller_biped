@@ -1,4 +1,6 @@
 #include "pos_controller_biped/control_algo.h"
+#include "std_msgs/Float64MultiArray.h"
+#include "ros/ros.h"
 
 // Implement the control algorithm here
 void update_control(int loop_count_,std::vector<double>& commands, const std::vector<hardware_interface::JointHandle>& joints_, ros::Time time){
@@ -27,9 +29,9 @@ void update_control(int loop_count_,std::vector<double>& commands, const std::ve
   float targetLeftLegLength = retractionLength < 0? (leg_0 + retractionLength) : leg_0;
   float targetRightLegLength = retractionLength > 0? (leg_0 - retractionLength) : leg_0;
 
-  //float targetLeftLegAngle= sin(time.toSec());
+  //float targetLeftLegAngle= 0.5*sin(2*3.14159*(stepFrequency/8.0)*time.toSec());
   float targetLeftLegAngle = 0;
-  //float targetRightLegAngle= -sin(time.toSec());
+  //float targetRightLegAngle= -0.5*sin(2*3.14159*(stepFrequency/8.0)*time.toSec());
   float targetRightLegAngle = 0;
 
   float leftAngle = acos((targetLeftLegLength/2)/(0.26)); 
@@ -71,9 +73,26 @@ void update_control(int loop_count_,std::vector<double>& commands, const std::ve
 
   // right front top joint
   commands[8] = -targetRightLegAngle - rightAngle;
+  //commands[8] = 0;
 
   // right front bottom joint
   commands[9] = targetRightBottomLinkAngle;
+  //commands[9] = 0;
+
+  /*
+  int argc=0;
+  char* str = "empty";
+  char** argv= &str;
+  ros::init(argc,argv,"talker");
+  ros::NodeHandle n;
+  ros::Publisher pub = n.advertise<std_msgs::Float64MultiArray>("command_publisher",1000);
+  std_msgs::Float64MultiArray msg;
+  for (int i=0;i<10;++i){
+    msg.data.push_back(commands[i]);
+  }		 
+  pub.publish(msg);
+  ros::spinOnce();
+  */
 
 //  for (int i=0;i<div;++i){
 //    commands[i] =0.3 * sin( (double)(loop_count_/500.0)); 
