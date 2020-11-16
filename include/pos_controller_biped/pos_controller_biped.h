@@ -53,6 +53,8 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
 
+#include <math.h>
+
 
 
 namespace pos_controller_biped_ns
@@ -92,7 +94,6 @@ public:
   unsigned int n_joints_;
 
 private:
-  int loop_count_;
   ros::Subscriber sub_command_;
 
   std::vector<control_toolbox::Pid> pid_controllers_;       /**< Internal PID controllers. */
@@ -101,9 +102,10 @@ private:
 
   void commandCB(const std_msgs::Float64MultiArrayConstPtr& msg);
   void enforceJointLimits(double &command, unsigned int index);
-
+  //void update_control(std::vector<double>& commands, const ros::Time& time);
 
   std::vector<hardware_interface::ImuSensorHandle> sensors_;
+  std::vector<double> rpyImu;
 }; // class
 
 } // namespace
