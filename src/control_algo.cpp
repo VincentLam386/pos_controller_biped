@@ -18,7 +18,7 @@ void update_control(std::vector<double>& commands, const std::vector<hardware_in
   // commands[0] = 0.3 * sin( (double)(loop_count_/500.0));
   // commands[1] = -0.3 * sin( (double)(loop_count_/500.0));
 
-  const float stepFrequency = 5;
+  const float stepFrequency = 3;
   const float PI = 3.14159;
   const float maxAngle = 2.0 *(PI/180.0);
   const float leg_0 = 0.51; //neutral length of leg
@@ -26,22 +26,23 @@ void update_control(std::vector<double>& commands, const std::vector<hardware_in
  
   const float retractionLength = leg_maxRet * sin(2*PI*(stepFrequency/2.0)*time.toSec());
 
+  float forwardSpeed = 0.0;
   float targetLeftLegLength;
   float targetRightLegLength;
-  float targetLeftLegAngle = 0;
-  float targetRightLegAngle = 0;
+  float targetLeftLegAngle = -0.0;
+  float targetRightLegAngle = -0.0;
 
   // Get the current actual leg angles using ideal geometry
   float curLeftLegAngle = -joints_[2].getPosition() - joints_[3].getPosition()/2.0;
   float curRightLegAngle = -joints_[6].getPosition() - joints_[7].getPosition()/2.0;
   // Get the current actual hip pitch angles from IMU
-  // float pitchToFront = 20.0 *(PI/180.0); // for program testing, input artificial pitch
+  //float pitchToFront = 50.0 *(PI/180.0); // for program testing, input artificial pitch
   float pitchToFront = rpyImu[1];
   
   if (retractionLength < 0){
     targetLeftLegLength = leg_0 + retractionLength;
     targetRightLegLength = leg_0;
-    if (pitchToFront < 0){
+  /*  if (pitchToFront < 0){
       // if deviate from horizontal by -30 deg, move vertical link by +30 deg to make it vertical
       //   and move further by +30 degree to provide returning force (?)
       targetLeftLegAngle = std::max(2*pitchToFront-curLeftLegAngle,-maxAngle) + curLeftLegAngle;
@@ -55,12 +56,12 @@ void update_control(std::vector<double>& commands, const std::vector<hardware_in
     else {    
       targetRightLegAngle = std::max(0-curRightLegAngle,-maxAngle) + curRightLegAngle;
     }
-    
+    */
   }
   else {
     targetRightLegLength = leg_0 - retractionLength;
     targetLeftLegLength = leg_0;
-    if (pitchToFront < 0) {
+  /*  if (pitchToFront < 0) {
       targetRightLegAngle = std::max(2*pitchToFront-curRightLegAngle,-maxAngle) + curRightLegAngle;
     }
     else{
@@ -71,10 +72,10 @@ void update_control(std::vector<double>& commands, const std::vector<hardware_in
     }
     else {    
       targetLeftLegAngle = std::max(0-curLeftLegAngle,-maxAngle) + curLeftLegAngle;
-    }
+    }*/
   }
-  std::cout << "Left leg now: " << (curLeftLegAngle/PI*180) << " Left leg to be: " << (targetLeftLegAngle/PI*180) << "\n";
-  std::cout << "Pitch now: " << (pitchToFront/PI*180) << std::endl;
+  //std::cout << "Left leg now: " << (curLeftLegAngle/PI*180) << " Left leg to be: " << (targetLeftLegAngle/PI*180) << "\n";
+  //std::cout << "Pitch now: " << (pitchToFront/PI*180) << std::endl;
 
   float leftAngle = acos((targetLeftLegLength/2)/(0.26)); 
   float targetLeftBottomLinkAngle = -2 * leftAngle;  

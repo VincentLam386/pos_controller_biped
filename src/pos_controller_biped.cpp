@@ -56,7 +56,11 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-  GrpPosController::GrpPosController(){}
+  GrpPosController::GrpPosController(): loop_count_(0){
+    for(unsigned int i=0;i<3;++i){
+      linearAcc.push_back(0.0);
+    }
+  }
   GrpPosController::~GrpPosController() {sub_command_.shutdown();}
 
   bool GrpPosController::init(hardware_interface::RobotHW* robot_hw, ros::NodeHandle &n)
@@ -155,6 +159,7 @@ namespace pos_controller_biped_ns
   void GrpPosController::update(const ros::Time& time, const ros::Duration& period)
   {
     std::vector<double> & commands = *commands_buffer_.readFromRT();
+    int updateAcc = 100;
 
     //IMU Portion
     if (sensors_[0].getOrientation()){
@@ -178,6 +183,39 @@ namespace pos_controller_biped_ns
     }
     else{
  	 ROS_WARN("No Orientation Data");
+    }	
+    
+    if (sensors_[0].getLinearAcceleration()){
+	   /*ROS_INFO_STREAM("Orientation X,Y,Z,W = "	<< sensors_[0].getOrientation()[0] <<", "
+							<< sensors_[0].getOrientation()[1] <<", "
+							<< sensors_[0].getOrientation()[2] <<", "
+							<< sensors_[0].getOrientation()[3] <<", "
+	   );*/
+
+	const double* acc = sensors_[0].getLinearAcceleration();
+	//std::valarray<double> newacc(acc);
+	//std::cout<< sizeof *acc / sizeof acc[0] << std::endl;
+	//std::vector<double> acc{ sensors_[0].getLinearAcceleration() };
+ 	for (unsigned int i=0;i<3;++i){
+          linearAcc[i] += acc[i];
+ 	  if (loop_count_%updateAcc == 0){
+ 	    linearAcc[i] /= updateAcc;
+	    //std::cout << (endAcc-startAcc) << std::endl;
+	    std::cout << linearAcc[i] << " ";
+ 	  }
+	  //std::cout << acc[i] << " " << linearAcc[i] << " ";
+	}
+        if (loop_count_%updateAcc == 0){
+          std::cout<< std::endl;
+	}
+	//std::cout<< linearAcc[0] << " " << linearAcc[1] << " " << linearAcc[2] << std::endl;
+
+	//ROS_INFO_STREAM("Orientation RPY = "	<< roll*(180.0/3.14159)<<"," <<pitch*(180.0/3.14159)<<", "<<yaw*(180.0/3.14159));
+
+	
+    }
+    else{
+ 	 ROS_WARN("No linear acceleration data");
     }	
 
     update_control(commands,joints_,rpyImu, time);
@@ -219,6 +257,12 @@ namespace pos_controller_biped_ns
 
         joints_[i].setCommand(commanded_effort);
     }
+    if (loop_count_%updateAcc == 0){
+      for (unsigned int i=0;i<3;++i){
+        linearAcc[i] = 0;
+      } 
+    }
+    ++loop_count_;
 
   }
 
