@@ -33,8 +33,8 @@ void update_control(std::vector<double>& commands, const std::vector<hardware_in
   float targetRightLegAngle = -0.0;
 
   // Get the current actual leg angles using ideal geometry
-  float curLeftLegAngle = -joints_[2].getPosition() - joints_[3].getPosition()/2.0;
-  float curRightLegAngle = -joints_[6].getPosition() - joints_[7].getPosition()/2.0;
+  //float curLeftLegAngle = -joints_[2].getPosition() - joints_[3].getPosition()/2.0;
+  //float curRightLegAngle = -joints_[6].getPosition() - joints_[7].getPosition()/2.0;
   // Get the current actual hip pitch angles from IMU
   //float pitchToFront = 50.0 *(PI/180.0); // for program testing, input artificial pitch
   float pitchToFront = rpyImu[1];
@@ -78,10 +78,10 @@ void update_control(std::vector<double>& commands, const std::vector<hardware_in
   //std::cout << "Pitch now: " << (pitchToFront/PI*180) << std::endl;
 
   float leftAngle = acos((targetLeftLegLength/2)/(0.26)); 
-  float targetLeftBottomLinkAngle = -2 * leftAngle;  
+  //float targetLeftBottomLinkAngle = -2 * leftAngle;  
 
   float rightAngle = acos((targetRightLegLength/2)/(0.26)); 
-  float targetRightBottomLinkAngle = -2 * rightAngle;
+  //float targetRightBottomLinkAngle = -2 * rightAngle;
 
   /*----------Update the joint angles below------------*/
   // left_abad_joint
@@ -94,25 +94,25 @@ void update_control(std::vector<double>& commands, const std::vector<hardware_in
   commands[2] = leftAngle - targetLeftLegAngle;
   
   // left bottom joint
-  commands[3] = targetLeftBottomLinkAngle;
+  //commands[3] = targetLeftBottomLinkAngle;
 
   // left front top joint
-  commands[4] = -leftAngle - targetLeftLegAngle;
+  commands[3] = leftAngle - targetLeftLegAngle;
 
   // left front bottom joint
-  commands[5] = -targetLeftBottomLinkAngle;
+  //commands[5] = -targetLeftBottomLinkAngle;
 
   // right top joint
-  commands[6] = rightAngle - targetRightLegAngle;
+  commands[4] = rightAngle - targetRightLegAngle;
 
   // right bottom joint
-  commands[7] = targetRightBottomLinkAngle;
+  //commands[7] = targetRightBottomLinkAngle;
 
   // right front top joint
-  commands[8] = -rightAngle - targetRightLegAngle;
+  commands[5] = rightAngle - targetRightLegAngle;
 
   // right front bottom joint
-  commands[9] = -targetRightBottomLinkAngle;
+  //commands[9] = -targetRightBottomLinkAngle;
 
   /*
   int argc=0;

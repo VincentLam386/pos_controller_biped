@@ -57,6 +57,7 @@ namespace pos_controller_biped_ns
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
   GrpPosController::GrpPosController(): loop_count_(0){
+    linearAcc.reserve(3);
     for(unsigned int i=0;i<3;++i){
       linearAcc.push_back(0.0);
     }
@@ -74,6 +75,7 @@ namespace pos_controller_biped_ns
 
     //IMU Portion
     const std::vector<std::string>& sensor_names = imu->getNames();
+    sensors_.reserve(sensor_names.size());
     for (unsigned i=0; i<sensor_names.size(); i++)
       ROS_DEBUG("Got sensor %s", sensor_names[i].c_str());
 
@@ -107,6 +109,8 @@ namespace pos_controller_biped_ns
     }
 
     pid_controllers_.resize(n_joints_);
+    joint_urdfs_.reserve(n_joints_);
+    joints_.reserve(n_joints_);
 
     for(unsigned int i=0; i<n_joints_; i++)
     {
@@ -146,6 +150,8 @@ namespace pos_controller_biped_ns
 
   void GrpPosController::starting(const ros::Time& time)
   {
+    //std::cout << "Number of joints: " << n_joints_ << std::endl;
+    ROS_INFO_STREAM("Number of joints = " << n_joints_  );
     std::vector<double> current_positions(n_joints_, 0.0);
     for (std::size_t i = 0; i < n_joints_; ++i)
     {
@@ -201,13 +207,13 @@ namespace pos_controller_biped_ns
  	  if (loop_count_%updateAcc == 0){
  	    linearAcc[i] /= updateAcc;
 	    //std::cout << (endAcc-startAcc) << std::endl;
-	    std::cout << linearAcc[i] << " ";
+	    //std::cout << linearAcc[i] << " ";
  	  }
 	  //std::cout << acc[i] << " " << linearAcc[i] << " ";
 	}
-        if (loop_count_%updateAcc == 0){
-          std::cout<< std::endl;
-	}
+        //if (loop_count_%updateAcc == 0){
+        //  std::cout<< std::endl;
+	//}
 	//std::cout<< linearAcc[0] << " " << linearAcc[1] << " " << linearAcc[2] << std::endl;
 
 	//ROS_INFO_STREAM("Orientation RPY = "	<< roll*(180.0/3.14159)<<"," <<pitch*(180.0/3.14159)<<", "<<yaw*(180.0/3.14159));
