@@ -55,6 +55,7 @@
 
 #include <math.h>
 #include <valarray>
+#include <deque>
 
 
 
@@ -95,7 +96,16 @@ public:
   unsigned int n_joints_;
 
 private:
+  const double PI = 3.1415926535;
   int loop_count_;
+  //int updateAcc = 10;
+  ros::Time lastTime;
+  ros::Time curTime;
+  ros::Duration dur;
+  double dur_t;
+  std::deque<uint64_t> time_ms;
+  double niu;
+  bool rightStand;
   ros::Subscriber sub_command_;
 
   std::vector<control_toolbox::Pid> pid_controllers_;       /**< Internal PID controllers. */
@@ -106,9 +116,27 @@ private:
   void enforceJointLimits(double &command, unsigned int index);
   //void update_control(std::vector<double>& commands, const ros::Time& time);
 
+  std::vector<double> truejointVel; // size of 10
+  std::vector<double> jointPos; // size of 10
+  std::vector<double> jointVel; // size of 10
+  std::vector<double> motorAngWithBase; // size of 6 (left 3 (miu, niu, abad), right 3)
+  std::vector<double> motorVel; // size of 6 (left 3, right 3)
+
+  std::vector<double> springCoef; // size of 2 (front, rear)
+
+  std::vector<double> tipForce; // size of 4 (left (x,y), right (x,y))
+  
+  std::deque< std::vector<double> >jointPosCummulative; // size of 10
+
   std::vector<hardware_interface::ImuSensorHandle> sensors_;
   std::vector<double> rpyImu; // size of 3
   std::vector<double> linearAcc; // size of 3
+
+  std::vector<double> linearVelFromAcc; // size of 3
+  std::vector<double> linearVelFromJoint; // size of 3
+
+  std::vector<double> linearDisFromAcc; // size of 3
+  std::vector<double> linearDisFromAcc2; // size of 3
 }; // class
 
 } // namespace

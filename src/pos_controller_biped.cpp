@@ -58,9 +58,16 @@ namespace pos_controller_biped_ns
  */
   GrpPosController::GrpPosController(): loop_count_(0){
     linearAcc.reserve(3);
+    linearVelFromAcc.reserve(3);
+    linearVelFromJoint.reserve(3);
+    linearDisFromAcc.reserve(3);
     for(unsigned int i=0;i<3;++i){
       linearAcc.push_back(0.0);
+      linearVelFromAcc.push_back(0.0);
+      linearVelFromJoint.push_back(0.0);
+      linearDisFromAcc.push_back(0.0);
     }
+    
   }
   GrpPosController::~GrpPosController() {sub_command_.shutdown();}
 
@@ -71,7 +78,10 @@ namespace pos_controller_biped_ns
     hardware_interface::EffortJointInterface* eff = robot_hw->get<hardware_interface::EffortJointInterface>();
     hardware_interface::ImuSensorInterface* imu = robot_hw->get<hardware_interface::ImuSensorInterface>();
 
-
+    // Set up spring coefficient
+    springCoef.reserve(2);
+    springCoef.push_back(143.2394);
+    springCoef.push_back(154.6986);
 
     //IMU Portion
     const std::vector<std::string>& sensor_names = imu->getNames();
@@ -85,8 +95,6 @@ namespace pos_controller_biped_ns
     }
 
 
-
-
     // List of controlled joints
     if(!n.getParam("joints", joint_names_))
     {
@@ -94,6 +102,10 @@ namespace pos_controller_biped_ns
       return false;
     }
     n_joints_ = joint_names_.size();
+
+    truejointVel.resize(n_joints_);
+    jointPos.resize(n_joints_);
+    jointVel.resize(n_joints_);
 
     if(n_joints_ == 0){
       ROS_ERROR_STREAM("List of joint names is empty.");
@@ -150,6 +162,7 @@ namespace pos_controller_biped_ns
 
   void GrpPosController::starting(const ros::Time& time)
   {
+    curTime = ros::Time::now();
     //std::cout << "Number of joints: " << n_joints_ << std::endl;
     ROS_INFO_STREAM("Number of joints = " << n_joints_  );
     std::vector<double> current_positions(n_joints_, 0.0);
@@ -162,10 +175,17 @@ namespace pos_controller_biped_ns
     commands_buffer_.initRT(current_positions);
   }
 
+
+
   void GrpPosController::update(const ros::Time& time, const ros::Duration& period)
   {
     std::vector<double> & commands = *commands_buffer_.readFromRT();
-    int updateAcc = 100;
+    lastTime = curTime;
+    curTime = ros::Time::now();
+    uint64_t curTime_msec = curTime.toNSec()/1000000;
+    dur = curTime-lastTime;
+    dur_t = dur.toSec();
+    //std::cout << dur_t << std::endl;
 
     //IMU Portion
     if (sensors_[0].getOrientation()){
@@ -202,17 +222,26 @@ namespace pos_controller_biped_ns
 	//std::valarray<double> newacc(acc);
 	//std::cout<< sizeof *acc / sizeof acc[0] << std::endl;
 	//std::vector<double> acc{ sensors_[0].getLinearAcceleration() };
- 	for (unsigned int i=0;i<3;++i){
-          linearAcc[i] += acc[i];
- 	  if (loop_count_%updateAcc == 0){
- 	    linearAcc[i] /= updateAcc;
+        if (loop_count_ > 1000){
+ 	  for (unsigned int i=0;i<3;++i){
+          //linearAcc[i] += acc[i];
+ 	  //if (loop_count_%updateAcc == 0){
+ 	    //linearAcc[i] /= updateAcc;
 	    //std::cout << (endAcc-startAcc) << std::endl;
 	    //std::cout << linearAcc[i] << " ";
- 	  }
+
+            linearDisFromAcc[i] = linearDisFromAcc[i] + linearVelFromAcc[i]*dur_t + acc[i]*dur_t*dur_t/2;
+            //linearDisFromAcc[i] = linearDisFromAcc[i] + linearVelFromAcc[i]*dur_t;
+            linearVelFromAcc[i] = linearVelFromAcc[i] + acc[i]*dur_t;
+
+            //std::cout << "Linear Vel " << i << ": " << linearVelFromAcc[i] << "  " << 
+            //     "Linear Dis " << i << ": " << linearDisFromAcc[i] << std::endl;
+ 	  //}
 	  //std::cout << acc[i] << " " << linearAcc[i] << " ";
-	}
+	  }
+        }
         //if (loop_count_%updateAcc == 0){
-        //  std::cout<< std::endl;
+        //std::cout<< std::endl;
 	//}
 	//std::cout<< linearAcc[0] << " " << linearAcc[1] << " " << linearAcc[2] << std::endl;
 
@@ -224,7 +253,76 @@ namespace pos_controller_biped_ns
  	 ROS_WARN("No linear acceleration data");
     }	
 
-    update_control(commands,joints_,rpyImu, time);
+    /*--------------------------------------------------------------------------------------*/
+    // Get joint position (assume encoder)  (and true joint velocity for testing)
+    for(unsigned int i=0; i<n_joints_;++i){
+      jointPos[i] = joints_[i].getPosition();
+      truejointVel[i] = joints_[i].getVelocity();
+      // Estimate joint velocity from joint angle (now and previous one)
+    }
+    //std::cout << jointPos[1]/PI*180 << " " << jointPos[8]/PI*180 << " " << jointPos[9]/PI*180 << "\n"
+    //         << truejointVel[1]/PI*180 << " " << truejointVel[8]/PI*180 << " " << truejointVel[9]/PI*180 << "\n"; 
+    //std::cout << jointVel[1]/PI*180 << " " << truejointVel[1]/PI*180 << " " << (jointVel[8]+jointVel[4])/PI*180 << " " << (truejointVel[8]+truejointVel[4])/PI*180 << " " << (jointVel[9]+jointVel[5])/PI*180 << " " << (truejointVel[9]+truejointVel[5])/PI*180 << "" << std::endl;
+
+    /*--------------------------------------------------------------------------------------*/
+    // Estimate joint velocity
+    if (jointPosCummulative.size() < 3) {
+      // Fill up the vectors of size 3
+      if (!time_ms.empty()){
+        if((time_ms.back() - curTime_msec) != 0) {
+          // Push back vector if timestamp is different
+          jointPosCummulative.push_back(jointPos);
+          time_ms.push_back(curTime_msec);
+        } 
+        else { 
+          // Replace last element with the new joint position when timestamp is the same as previous one
+          jointPosCummulative.pop_back();
+          jointPosCummulative.push_back(jointPos);
+        }
+      } 
+      else {
+        // Start filling up vectors (very first time only)
+        jointPosCummulative.push_back(jointPos);
+        time_ms.push_back(curTime_msec);
+      }
+    } 
+    else {
+      // Start estimating velocity and Allowing pop front when vectors have size 3
+      if((time_ms.back() - curTime_msec) != 0) {
+        // Pop front and push back when timestamp is different
+        jointPosCummulative.pop_front();
+        time_ms.pop_front();
+        jointPosCummulative.push_back(jointPos);
+        time_ms.push_back(curTime_msec);
+      } else {
+        // Replace last element with the new joint position when timestamp is the same as previous one
+        jointPosCummulative.pop_back();
+        jointPosCummulative.push_back(jointPos);
+      }
+      // Estimate joint velocity
+      for(unsigned int i=0; i<n_joints_; ++i){
+        // Use finte backward numerical differentiation (with different timesteps)
+        jointVel[i] = (3*(jointPosCummulative[2][i]-jointPosCummulative[1][i])/(2*(time_ms[2]-time_ms[1])) - ((jointPosCummulative[1][i]-jointPosCummulative[0][i])/(2*(time_ms[1]-time_ms[0]))))*1000;
+        // Use simple numerical differentiation
+        //jointVel[i] = (jointPosCummulative[2][i]-jointPosCummulative[1][i])/(time_ms[2]-time_ms[1])*1000; 
+      }
+    }
+
+    /*--------------------------------------------------------------------------------------*/
+    // Get the angle position and velocity of the motor in world frame
+    motorAngleAndVel(motorAngWithBase,motorVel,  jointPos,jointVel);
+
+    /*--------------------------------------------------------------------------------------*/
+    // Get leg tip force in world frame
+    legTipForce(tipForce,  motorAngWithBase,jointPos,springCoef);
+
+    /*--------------------------------------------------------------------------------------*/
+    // Get linear velocity in world frame from joint position and velocity
+    //getLinearVelFromJoint(linearVelFromJoint, rightStand, truejointVel, jointPos, dur_t);
+
+    /*--------------------------------------------------------------------------------------*/
+    // Update desired position of links and torque for ABAD motor
+    update_control(commands,niu,joints_,linearVelFromJoint,rpyImu, time);
 
     for(unsigned int i=0; i<n_joints_; i++)
     {
@@ -233,7 +331,7 @@ namespace pos_controller_biped_ns
         double error;
         double commanded_effort;
 
-        double current_position = joints_[i].getPosition();
+        double current_position = jointPos[i];
 
         // Make sure joint is within limits if applicable
         enforceJointLimits(command_position, i);
@@ -263,11 +361,11 @@ namespace pos_controller_biped_ns
 
         joints_[i].setCommand(commanded_effort);
     }
-    if (loop_count_%updateAcc == 0){
-      for (unsigned int i=0;i<3;++i){
-        linearAcc[i] = 0;
-      } 
-    }
+    //if (loop_count_%updateAcc == 0){
+    //  for (unsigned int i=0;i<3;++i){
+    //    linearAcc[i] = 0;
+    //  }
+    //}
     ++loop_count_;
 
   }
