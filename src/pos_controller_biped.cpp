@@ -261,13 +261,13 @@ namespace pos_controller_biped_ns
       jointPos[i] = joints_[i].getPosition();
       truejointVel[i] = joints_[i].getVelocity();
     }
-    //std::cout << jointPos[1]/PI*180 << " " << jointPos[8]/PI*180 << " " << jointPos[9]/PI*180 << "\n"
-    //         << truejointVel[1]/PI*180 << " " << truejointVel[8]/PI*180 << " " << truejointVel[9]/PI*180 << "\n"; 
+    //std::cout << jointPos[1]/PI*180 << " " << (jointPos[8]+jointPos[6])/PI*180 << " " << (jointPos[9]+jointPos[7])/PI*180 << " ";
+    //std::cout << truejointVel[1]/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << std::endl; 
 
     /*--------------------------------------------------------------------------------------*/
     // Estimate joint velocity
-    if (jointPosCummulative.size() < 15) {
-      // Fill up the vectors of size 4
+    /*if (jointPosCummulative.size() < 15) {
+      // Fill up the vectors of size 15
       if (!time_ms.empty()){
         if((time_ms.back() - curTime_msec) != 0) {
           // Push back vector if timestamp is different
@@ -287,7 +287,7 @@ namespace pos_controller_biped_ns
       }
     } 
     else {
-      // Start estimating velocity and Allowing pop front when vectors have size 4
+      // Start estimating velocity and Allowing pop front when vectors have size 15
       if((time_ms.back() - curTime_msec) != 0) {
         // Pop front and push back when timestamp is different
         jointPosCummulative.pop_front();
@@ -307,12 +307,13 @@ namespace pos_controller_biped_ns
         // Use simple numerical differentiation
         //jointVel[i] = (jointPosCummulative[2][i]-jointPosCummulative[1][i])/(time_ms[2]-time_ms[1])*1000; 
 
-        // Simple numerical differentiation with 1 time interval
+        // Simple numerical differentiation with 15 time interval
         jointVel[i] = (jointPosCummulative[14][i]-jointPosCummulative[0][i])/(time_ms[14]-time_ms[0])*1000;
       }
     }
 
-    //std::cout << jointVel[1]/PI*180 << " " << truejointVel[1]/PI*180 << " " << (jointVel[8]+jointVel[6])/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (jointVel[9]+jointVel[7])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << "" << std::endl;
+    //std::cout << jointVel[1]/PI*180 << " " << truejointVel[1]/PI*180 << " " << (jointVel[8]+jointVel[6])/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (jointVel[9]+jointVel[7])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << "" << std::endl;*/
+    getJointVel(jointVel, jointPosCummulative, time_ms, curTime_msec, jointPos);
 
     /*--------------------------------------------------------------------------------------*/
     // Get the angle position and velocity of the motor in world frame

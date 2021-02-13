@@ -132,6 +132,59 @@ void update_control(std::vector<double>& commands, const double niu, const std::
   return;
 }
 
+void getJointVel(std::vector<double>& jointVel, std::deque< std::vector<double> >& jointPosCummulative, std::deque<uint64_t>& time_ms, const uint64_t curTime_msec, const std::vector<double>& jointPos){
+  // Estimate joint velocity
+  if (jointPosCummulative.size() < 15) {
+    // Fill up the vectors of size 15
+    if (!time_ms.empty()){
+      if((time_ms.back() - curTime_msec) != 0) {
+        // Push back vector if timestamp is different
+        jointPosCummulative.push_back(jointPos);
+        time_ms.push_back(curTime_msec);
+      } 
+      else { 
+        // Replace last element with the new joint position when timestamp is the same as previous one
+        jointPosCummulative.pop_back();
+        jointPosCummulative.push_back(jointPos);
+      }
+    } 
+    else {
+      // Start filling up vectors (very first time only)
+      jointPosCummulative.push_back(jointPos);
+      time_ms.push_back(curTime_msec);
+    }
+  } 
+  else {
+    // Start estimating velocity and Allowing pop front when vectors have size 15
+    if((time_ms.back() - curTime_msec) != 0) {
+      // Pop front and push back when timestamp is different
+      jointPosCummulative.pop_front();
+      time_ms.pop_front();
+      jointPosCummulative.push_back(jointPos);
+      time_ms.push_back(curTime_msec);
+    } else {
+      // Replace last element with the new joint position when timestamp is the same as previous one
+      jointPosCummulative.pop_back();
+      jointPosCummulative.push_back(jointPos);
+    }
+    // Estimate joint velocity
+    for(unsigned int i=0; i<jointVel.size(); ++i){
+      // Use finte backward numerical differentiation (with different timesteps)
+      //jointVel[i] = (3*(jointPosCummulative[2][i]-jointPosCummulative[1][i])/(2*(time_ms[2]-time_ms[1])) - ((jointPosCummulative[1][i]-jointPosCummulative[0][i])/(2*(time_ms[1]-time_ms[0]))))*1000;
+
+      // Use simple numerical differentiation
+      //jointVel[i] = (jointPosCummulative[2][i]-jointPosCummulative[1][i])/(time_ms[2]-time_ms[1])*1000; 
+
+      // Simple numerical differentiation with 15 time interval
+      jointVel[i] = (jointPosCummulative[14][i]-jointPosCummulative[0][i])/(time_ms[14]-time_ms[0])*1000;
+    }
+  }
+
+  //std::cout << jointVel[1]/PI*180 << " " << truejointVel[1]/PI*180 << " " << (jointVel[8]+jointVel[6])/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (jointVel[9]+jointVel[7])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << "" << std::endl;
+
+  return;
+}
+
 void linksAngleAndVel(std::vector<double>& linksAngWithBase, 
                       std::vector<double>& linksVel, 
                       const std::vector<double>& jointPos, 
@@ -236,7 +289,7 @@ void getLinearVelFromJoint(std::vector<double>& linearVelFromJoint,
                           r0*sin(niu)*cos(lambda) *niu_dot +
                           (-r0*(cos(miu)+cos(niu))*sin(lambda)-rb*cos(lambda)) *lambda_dot;
 
-  std::cout << linearVelFromJoint[0] << " " << linearVelFromJoint[1] << " " << linearVelFromJoint[2] << "" << std::endl;
+  //std::cout << linearVelFromJoint[0] << " " << linearVelFromJoint[1] << " " << linearVelFromJoint[2] << "" << std::endl;
 
 }
 
