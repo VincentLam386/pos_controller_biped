@@ -106,6 +106,9 @@ private:
   std::deque<uint64_t> time_ms;
   double niu;
   bool rightStand;
+  bool rightStandControl;
+  bool dropping;
+  bool startTouch;
   ros::Subscriber sub_command_;
 
   std::vector<control_toolbox::Pid> pid_controllers_;       /**< Internal PID controllers. */
@@ -114,7 +117,6 @@ private:
 
   void commandCB(const std_msgs::Float64MultiArrayConstPtr& msg);
   void enforceJointLimits(double &command, unsigned int index);
-  //void update_control(std::vector<double>& commands, const ros::Time& time);
 
   std::vector<double> truejointVel; // size of 10
   std::vector<double> jointPos; // size of 10
@@ -126,18 +128,21 @@ private:
 
   std::vector<double> tipForce; // size of 4 (left (x,y), right (x,y))
   
-  std::deque< std::vector<double> >jointPosCummulative; // size of 10
+  std::deque< std::vector<double> > jointPosCummulative; // size of 15
 
   std::vector<hardware_interface::ImuSensorHandle> sensors_;
   std::vector<double> rpyImu; // size of 3
   std::vector<double> linearAcc; // size of 3
 
-  std::vector<double> linearVelFromAcc; // size of 3
-  std::vector<double> linearVelFromJoint; // size of 3
-  std::vector<double> prevLinearVelFromJoint; // size of 3
+  //std::vector<double> linearVelFromJoint; // size of 3
+  std::deque< std::vector<double> > linearVelFromJoint;
+  //std::vector<double> prevLinearVelFromJoint; // size of 3
 
-  std::vector<double> linearDisFromAcc; // size of 3
-  std::vector<double> linearDisFromAcc2; // size of 3
+  std::vector<double> xyTipPos; // size of 2 (x and y)
+
+
+  //std::vector<double> linearDisFromAcc; // size of 3
+
 }; // class
 
 } // namespace

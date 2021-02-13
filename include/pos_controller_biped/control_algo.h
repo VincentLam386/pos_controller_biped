@@ -10,9 +10,11 @@ struct IMUData{
   double omega[3];
 };
 
-void xyTipPlacement(std::vector<double>& xyTipPos, const std::vector<double>& linearVelFromJoint, const std::vector<double>& prevLinearVelFromJoint);
+void xyTipPlacement(std::vector<double>& xyTipPos, const std::deque< std::vector<double> >& linearVelFromJoint);
 
-void update_control(std::vector<double>& commands, const double niu, const std::vector<hardware_interface::JointHandle>& joints_, const std::vector<double>& linearVelFromJoint, const std::vector<double>& rpyImu, const ros::Time& time);
+void rightStandForControl(bool& rightStandControl, bool& dropping, bool& startTouch, const std::vector<double>& tipForce);
+
+void update_control(std::vector<double>& commands, const bool rightStandControl, const std::vector<double>& xyTipPos, const std::vector<hardware_interface::JointHandle>& joints_, const std::vector<double>& rpyImu, const ros::Time& time);
 
 void getJointVel(std::vector<double>& jointVel, std::deque< std::vector<double> >& jointPosCummulative, std::deque<uint64_t>& time_ms, const uint64_t curTime_msec, const std::vector<double>& jointPos);
 
@@ -22,7 +24,7 @@ void legTipForce(std::vector<double>& tipForce, const std::vector<double>& links
 
 void rightStandForLinearVel(bool& rightStand, const std::vector<double>& tipForce);
 
-void getLinearVelFromJoint(std::vector<double>& linearVelFromJoint, const bool& rightStand, const std::vector<double>& jointVel, const std::vector<double>& jointPos);
+void getLinearVelFromJoint(std::deque< std::vector<double> >& linearVelFromJoint, const bool& rightStand, const std::vector<double>& jointVel, const std::vector<double>& jointPos);
 
 void rightStandForControl();
 

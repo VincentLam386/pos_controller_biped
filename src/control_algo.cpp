@@ -4,18 +4,59 @@
 #include <ros/console.h>
 
 void xyTipPlacement(std::vector<double>& xyTipPos,
-                    const std::vector<double>& linearVelFromJoint,
-                    const std::vector<double>& prevLinearVelFromJoint){
-  std::vector<double> desired_vel { 1.0,0.0 };  // x direction, y direction
+                    const std::deque< std::vector<double> >& linearVelFromJoint){
+  const double kp = 0.05;
+  const double kd = 0.01; 
+  const double kv = 0.01;
+  std::vector<double> desired_vel { 0.5,0.0 };  // x direction, y direction
   
+  double curVel[2] = {0.0, 0.0};
+  double diffVel[2] = {0.0, 0.0};
+  if(!linearVelFromJoint.empty()){
+    for(unsigned int i=0; i<2; ++i){
+      for(unsigned int j=0; j<linearVelFromJoint.size(); ++j){
+        curVel[i] += linearVelFromJoint[j][i];
+      }
+      curVel[i] /= linearVelFromJoint.size();
+      diffVel[i] = linearVelFromJoint.back()[i]-linearVelFromJoint.front()[i];
+    }
+  }
 
+  for(unsigned int i=0; i<xyTipPos.size(); ++i){
+    xyTipPos[i] = kp*(curVel[i]-desired_vel[i]) + kd*diffVel[i] + kv*curVel[i];
+  }
 
+  std::cout << "Variable in x: " << (curVel[0]-desired_vel[0]) << " " << diffVel[0] << " " << curVel[0] << std::endl;
+  
+  //std::cout << xyTipPos[0] << " " << xyTipPos[1] << std::endl;
 
+  return;
+}
 
+void rightStandForControl(bool& rightStandControl, bool& dropping, bool& startTouch, const std::vector<double>& tipForce){
+  unsigned int forceIndex = (-rightStandControl*2)+3;
+  if(!dropping){
+    dropping = (tipForce[forceIndex] > 80);
+  } 
+  else {
+    if(!startTouch){
+      startTouch = (tipForce[forceIndex] < 60);
+    }
+    else {
+      if(tipForce[forceIndex] > 61){
+        rightStandControl = !rightStandControl;
+        dropping = false;
+        startTouch = false;
+      }
+    }
+  }
+  //std::cout << rightStandControl << std::endl;
+
+  return;
 }
 
 // Implement the control algorithm here
-void update_control(std::vector<double>& commands, const double niu, const std::vector<hardware_interface::JointHandle>& joints_, const std::vector<double>& linearVelFromJoint, const std::vector<double>& rpyImu, const ros::Time& time){
+void update_control(std::vector<double>& commands, const bool rightStandControl, const std::vector<double>& xyTipPos, const std::vector<hardware_interface::JointHandle>& joints_, const std::vector<double>& rpyImu, const ros::Time& time){
   /* commands:    a vector storing the target positions for each joint
                   to be updated in this function
      joints_:     a vector storing all the joints (motors), can use 
@@ -29,7 +70,7 @@ void update_control(std::vector<double>& commands, const double niu, const std::
      commands[0] = 0.3 * sin( (double)(loop_count_/500.0));
      commands[1] = -0.3 * sin( (double)(loop_count_/500.0));                  */
 
-  const double stepFrequency = 3;
+  const double stepFrequency = 4;
   const double PI = 3.14159;
   const double maxAngle = 2.0 *(PI/180.0);
   const double leg_0 = 0.51;     //neutral length of leg
@@ -38,10 +79,9 @@ void update_control(std::vector<double>& commands, const double niu, const std::
   const double retractionLength = leg_maxRet * sin(2*PI*(stepFrequency/2.0)*time.toSec());
 
   double forwardSpeed = 0.0;
-  double targetLeftLegLength;
-  double targetRightLegLength;
-  double targetLeftLegAngle = -0.0;
-  double targetRightLegAngle = -0.0;
+  double targetLegLength[2] = {0.0, 0.0}; // left, right
+  double targetLegAngle[2] =  {0.0,0.0}; // left, right
+  double controlAngle[4] = {0.0,0.0, 0.0,0.0}; // left(miu,niu), right(miu,niu)
 
   double f1 = 0.0; // force threshold for stance phase
   double f2 = 0.0; // force threshold for swing phase
@@ -55,48 +95,45 @@ void update_control(std::vector<double>& commands, const double niu, const std::
   float pitchToFront = rpyImu[1];
   
   if (retractionLength < 0){
-    targetLeftLegLength = leg_0 + retractionLength;
-    targetRightLegLength = leg_0;
-  /*  if (pitchToFront < 0){
-      // if deviate from horizontal by -30 deg, move vertical link by +30 deg to make it vertical
-      //   and move further by +30 degree to provide returning force (?)
-      targetLeftLegAngle = std::max(2*pitchToFront-curLeftLegAngle,-maxAngle) + curLeftLegAngle;
-    }
-    else {
-      targetLeftLegAngle = std::min(2*pitchToFront-curLeftLegAngle,maxAngle) + curLeftLegAngle;  
-    }
-    if (curRightLegAngle < 0){
-      targetRightLegAngle = std::min(0-curRightLegAngle, maxAngle) + curRightLegAngle;
-    }
-    else {    
-      targetRightLegAngle = std::max(0-curRightLegAngle,-maxAngle) + curRightLegAngle;
-    }
-    */
+    targetLegLength[0] = leg_0 + retractionLength;
+    targetLegLength[1] = leg_0;
+
+    std::cout << "Left tip x pos & length: " << xyTipPos[0] << " " << targetLegLength[0] << std::endl;
+
   }
   else {
-    targetRightLegLength = leg_0 - retractionLength;
-    targetLeftLegLength = leg_0;
-  /*  if (pitchToFront < 0) {
-      targetRightLegAngle = std::max(2*pitchToFront-curRightLegAngle,-maxAngle) + curRightLegAngle;
-    }
-    else{
-      targetRightLegAngle = std::min(2*pitchToFront-curRightLegAngle,maxAngle) + curRightLegAngle;
-    }
-    if (curLeftLegAngle < 0){
-      targetLeftLegAngle = std::min(0-curLeftLegAngle, maxAngle) + curLeftLegAngle;
-    }
-    else {    
-      targetLeftLegAngle = std::max(0-curLeftLegAngle,-maxAngle) + curLeftLegAngle;
-    }*/
+    targetLegLength[0] = leg_0;
+    targetLegLength[1] = leg_0 - retractionLength;
+
+  }
+
+  if(rightStandControl){
+    controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]);
+    std::cout << "Left tip x angle: " << controlAngle[0]/PI*180 << std::endl;
+    controlAngle[1] = -controlAngle[0];
+    //controlAngle[2] = -controlAngle[0]*0.5;
+    //controlAngle[3] = controlAngle[0]*0.5;
+    controlAngle[2] = 0.0;
+    controlAngle[3] = 0.0;
+  }
+  else{    
+    controlAngle[2] = -asin(xyTipPos[0]/targetLegLength[1]);
+    controlAngle[3] = -controlAngle[2];
+
+    //controlAngle[0] = -controlAngle[2]*0.5;
+    //controlAngle[1] = controlAngle[2]*0.5;
+    controlAngle[0] = 0.0;
+    controlAngle[1] = 0.0;
   }
   //std::cout << "Left leg now: " << (curLeftLegAngle/PI*180) << " Left leg to be: " << (targetLeftLegAngle/PI*180) << "\n";
-  //std::cout << "Pitch now: " << (pitchToFront/PI*180) << std::endl;
 
-  float leftAngle = acos((targetLeftLegLength/2)/(0.26)); 
-  //float targetLeftBottomLinkAngle = -2 * leftAngle;  
+  controlAngle[0] += acos((targetLegLength[0]/2)/(0.26));
+  controlAngle[1] += acos((targetLegLength[0]/2)/(0.26));
+  controlAngle[2] += acos((targetLegLength[1]/2)/(0.26)); 
+  controlAngle[3] += acos((targetLegLength[1]/2)/(0.26)); 
 
-  float rightAngle = acos((targetRightLegLength/2)/(0.26)); 
-  //float targetRightBottomLinkAngle = -2 * rightAngle;
+  //std::cout << controlAngle[0]/PI*180 << " " << controlAngle[1]/PI*180 << std::endl;
+  std::cout << std::endl;
 
   /*----------Update the joint angles below------------*/
   // left_abad_joint
@@ -106,10 +143,10 @@ void update_control(std::vector<double>& commands, const double niu, const std::
   commands[1] = 0;
 
   // left spring rear joint
-  commands[2] = leftAngle - targetLeftLegAngle;
+  commands[2] = controlAngle[0];
 
   // left spring front joint
-  commands[3] = leftAngle - targetLeftLegAngle;
+  commands[3] = controlAngle[1];
 
   // left rear joint
   commands[4] = 0;
@@ -118,10 +155,10 @@ void update_control(std::vector<double>& commands, const double niu, const std::
   commands[5] = 0;
 
   // right spring rear joint
-  commands[6] = rightAngle - targetRightLegAngle;
+  commands[6] = controlAngle[2];
 
   // right spring front joint
-  commands[7] = rightAngle - targetRightLegAngle;
+  commands[7] = controlAngle[3];
 
   // right rear joint
   commands[8] = 0;
@@ -133,7 +170,6 @@ void update_control(std::vector<double>& commands, const double niu, const std::
 }
 
 void getJointVel(std::vector<double>& jointVel, std::deque< std::vector<double> >& jointPosCummulative, std::deque<uint64_t>& time_ms, const uint64_t curTime_msec, const std::vector<double>& jointPos){
-  // Estimate joint velocity
   if (jointPosCummulative.size() < 15) {
     // Fill up the vectors of size 15
     if (!time_ms.empty()){
@@ -242,6 +278,7 @@ void legTipForce(std::vector<double>& tipForce,
   }
 
   //std::cout << "Tip force: " << tipForce[0] << " " << tipForce[1] << "\n" << std::endl;
+  //std::cout << tipForce[1] << " " << tipForce[3] << std::endl;
 
   return;
 }
@@ -259,11 +296,16 @@ void rightStandForLinearVel(bool& rightStand, const std::vector<double>& tipForc
   return;
 }
 
-void getLinearVelFromJoint(std::vector<double>& linearVelFromJoint, 
+void getLinearVelFromJoint(std::deque< std::vector<double> >& linearVelFromJoint, 
                            const bool& rightStand,
                            const std::vector<double>& jointVel, 
                            const std::vector<double>& jointPos)
 {
+  if(linearVelFromJoint.size() >= 15){
+    linearVelFromJoint.pop_front();
+  }
+  std::vector<double> curLinearVelFromJoint;
+  curLinearVelFromJoint.reserve(3);
   const float r0 = 0.26;
   const float rb = 0.08;
 
@@ -277,17 +319,19 @@ void getLinearVelFromJoint(std::vector<double>& linearVelFromJoint,
   double lambda_dot = jointVel[0+rightStand];
 
   // x-direction velocity
-  linearVelFromJoint[0] = r0*cos(miu) *miu_dot -
-                          r0*cos(niu) *niu_dot; 
+  curLinearVelFromJoint.push_back(r0*cos(miu) *miu_dot -
+                                  r0*cos(niu) *niu_dot); 
   // y-direction velocity
-  linearVelFromJoint[1] = -rightStand*
-                          (-r0*sin(miu)*sin(lambda) *miu_dot -
-                          r0*sin(niu)*sin(lambda) *niu_dot +
-                          (r0*(cos(miu)+cos(niu))*cos(lambda)-rb*sin(lambda)) *lambda_dot);
+  curLinearVelFromJoint.push_back( -rightStand*
+                                   (-r0*sin(miu)*sin(lambda) *miu_dot -
+                                   r0*sin(niu)*sin(lambda) *niu_dot +
+                                   (r0*(cos(miu)+cos(niu))*cos(lambda)-rb*sin(lambda)) *lambda_dot));
   // z-direction velocity   
-  linearVelFromJoint[2] = -r0*sin(miu)*cos(lambda) *miu_dot -
-                          r0*sin(niu)*cos(lambda) *niu_dot +
-                          (-r0*(cos(miu)+cos(niu))*sin(lambda)-rb*cos(lambda)) *lambda_dot;
+  curLinearVelFromJoint.push_back( -r0*sin(miu)*cos(lambda) *miu_dot -
+                                   r0*sin(niu)*cos(lambda) *niu_dot +
+                                   (-r0*(cos(miu)+cos(niu))*sin(lambda)-rb*cos(lambda)) *lambda_dot);
+
+  linearVelFromJoint.push_back(curLinearVelFromJoint);
 
   //std::cout << linearVelFromJoint[0] << " " << linearVelFromJoint[1] << " " << linearVelFromJoint[2] << "" << std::endl;
 
