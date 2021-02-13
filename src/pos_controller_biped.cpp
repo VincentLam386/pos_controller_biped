@@ -60,11 +60,13 @@ namespace pos_controller_biped_ns
     linearAcc.reserve(3);
     linearVelFromAcc.reserve(3);
     linearVelFromJoint.reserve(3);
+    prevLinearVelFromJoint.reserve(3);
     linearDisFromAcc.reserve(3);
     for(unsigned int i=0;i<3;++i){
       linearAcc.push_back(0.0);
       linearVelFromAcc.push_back(0.0);
       linearVelFromJoint.push_back(0.0);
+      prevLinearVelFromJoint.push_back(0.0);
       linearDisFromAcc.push_back(0.0);
     }
     
@@ -80,9 +82,9 @@ namespace pos_controller_biped_ns
 
     // Set up spring coefficient
     springCoef.reserve(2);
-    springCoef.push_back(143.2394);
     springCoef.push_back(154.6986);
-
+    springCoef.push_back(143.2394);
+    
     //IMU Portion
     const std::vector<std::string>& sensor_names = imu->getNames();
     sensors_.reserve(sensor_names.size());
@@ -258,16 +260,14 @@ namespace pos_controller_biped_ns
     for(unsigned int i=0; i<n_joints_;++i){
       jointPos[i] = joints_[i].getPosition();
       truejointVel[i] = joints_[i].getVelocity();
-      // Estimate joint velocity from joint angle (now and previous one)
     }
     //std::cout << jointPos[1]/PI*180 << " " << jointPos[8]/PI*180 << " " << jointPos[9]/PI*180 << "\n"
     //         << truejointVel[1]/PI*180 << " " << truejointVel[8]/PI*180 << " " << truejointVel[9]/PI*180 << "\n"; 
-    //std::cout << jointVel[1]/PI*180 << " " << truejointVel[1]/PI*180 << " " << (jointVel[8]+jointVel[4])/PI*180 << " " << (truejointVel[8]+truejointVel[4])/PI*180 << " " << (jointVel[9]+jointVel[5])/PI*180 << " " << (truejointVel[9]+truejointVel[5])/PI*180 << "" << std::endl;
 
     /*--------------------------------------------------------------------------------------*/
     // Estimate joint velocity
-    if (jointPosCummulative.size() < 3) {
-      // Fill up the vectors of size 3
+    if (jointPosCummulative.size() < 15) {
+      // Fill up the vectors of size 4
       if (!time_ms.empty()){
         if((time_ms.back() - curTime_msec) != 0) {
           // Push back vector if timestamp is different
@@ -287,7 +287,7 @@ namespace pos_controller_biped_ns
       }
     } 
     else {
-      // Start estimating velocity and Allowing pop front when vectors have size 3
+      // Start estimating velocity and Allowing pop front when vectors have size 4
       if((time_ms.back() - curTime_msec) != 0) {
         // Pop front and push back when timestamp is different
         jointPosCummulative.pop_front();
@@ -302,26 +302,39 @@ namespace pos_controller_biped_ns
       // Estimate joint velocity
       for(unsigned int i=0; i<n_joints_; ++i){
         // Use finte backward numerical differentiation (with different timesteps)
-        jointVel[i] = (3*(jointPosCummulative[2][i]-jointPosCummulative[1][i])/(2*(time_ms[2]-time_ms[1])) - ((jointPosCummulative[1][i]-jointPosCummulative[0][i])/(2*(time_ms[1]-time_ms[0]))))*1000;
+        //jointVel[i] = (3*(jointPosCummulative[2][i]-jointPosCummulative[1][i])/(2*(time_ms[2]-time_ms[1])) - ((jointPosCummulative[1][i]-jointPosCummulative[0][i])/(2*(time_ms[1]-time_ms[0]))))*1000;
+
         // Use simple numerical differentiation
         //jointVel[i] = (jointPosCummulative[2][i]-jointPosCummulative[1][i])/(time_ms[2]-time_ms[1])*1000; 
+
+        // Simple numerical differentiation with 1 time interval
+        jointVel[i] = (jointPosCummulative[14][i]-jointPosCummulative[0][i])/(time_ms[14]-time_ms[0])*1000;
       }
     }
 
+    //std::cout << jointVel[1]/PI*180 << " " << truejointVel[1]/PI*180 << " " << (jointVel[8]+jointVel[6])/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (jointVel[9]+jointVel[7])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << "" << std::endl;
+
     /*--------------------------------------------------------------------------------------*/
     // Get the angle position and velocity of the motor in world frame
-    motorAngleAndVel(motorAngWithBase,motorVel,  jointPos,jointVel);
+    linksAngleAndVel(linksAngWithBase,linksVel,  jointPos,jointVel);
 
     /*--------------------------------------------------------------------------------------*/
     // Get leg tip force in world frame
-    legTipForce(tipForce,  motorAngWithBase,jointPos,springCoef);
+    legTipForce(tipForce,  linksAngWithBase,jointPos,springCoef);
 
     /*--------------------------------------------------------------------------------------*/
     // Get linear velocity in world frame from joint position and velocity
-    //getLinearVelFromJoint(linearVelFromJoint, rightStand, truejointVel, jointPos, dur_t);
+    rightStandForLinearVel(rightStand,tipForce); // determine if right(or left) leg is standing
+
+    for(unsigned int i=0; i<linearVelFromJoint.size(); ++i){
+      prevLinearVelFromJoint[i] = linearVelFromJoint[i];
+    }
+
+    getLinearVelFromJoint(linearVelFromJoint, rightStand, jointVel, jointPos);
 
     /*--------------------------------------------------------------------------------------*/
     // Update desired position of links and torque for ABAD motor
+
     update_control(commands,niu,joints_,linearVelFromJoint,rpyImu, time);
 
     for(unsigned int i=0; i<n_joints_; i++)

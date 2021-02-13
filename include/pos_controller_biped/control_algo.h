@@ -9,15 +9,17 @@ struct IMUData{
   double omega[3];
 };
 
+void xyTipPlacement(std::vector<double>& xyTipPos, const std::vector<double>& linearVelFromJoint, const std::vector<double>& prevLinearVelFromJoint);
+
 void update_control(std::vector<double>& commands, const double niu, const std::vector<hardware_interface::JointHandle>& joints_, const std::vector<double>& linearVelFromJoint, const std::vector<double>& rpyImu, const ros::Time& time);
 
-void getLinearVelFromJoint(std::vector<double>& linearVelFromJoint, bool& rightStand, const std::vector<double>& jointVel, const std::vector<double>& jointPos, const double duration);
+void linksAngleAndVel(std::vector<double>& linksAngWithBase, std::vector<double>& linksVel, const std::vector<double>& jointPos, const std::vector<double>& jointVel);
 
-void motorAngleAndVel(std::vector<double>& motorAngWithBase, std::vector<double>& motorVel, const std::vector<double>& jointPos, const std::vector<double>& jointVel);
+void legTipForce(std::vector<double>& tipForce, const std::vector<double>& linksAngWithBase, const std::vector<double>& jointPos, const std::vector<double>& springCoef);
 
-void legTipForce(std::vector<double>& tipForce, const std::vector<double>& motorAngWithBase, const std::vector<double>& jointPos, const std::vector<double>& springCoef);
+void rightStandForLinearVel(bool& rightStand, const std::vector<double>& tipForce);
 
-void rightStandForLinearVel();
+void getLinearVelFromJoint(std::vector<double>& linearVelFromJoint, const bool& rightStand, const std::vector<double>& jointVel, const std::vector<double>& jointPos);
 
 void rightStandForControl();
 

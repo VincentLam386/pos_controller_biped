@@ -119,8 +119,8 @@ private:
   std::vector<double> truejointVel; // size of 10
   std::vector<double> jointPos; // size of 10
   std::vector<double> jointVel; // size of 10
-  std::vector<double> motorAngWithBase; // size of 6 (left 3 (miu, niu, abad), right 3)
-  std::vector<double> motorVel; // size of 6 (left 3, right 3)
+  std::vector<double> linksAngWithBase; // size of 6 (left 3 (miu, niu, abad), right 3)
+  std::vector<double> linksVel; // size of 6 (left 3, right 3)
 
   std::vector<double> springCoef; // size of 2 (front, rear)
 
@@ -134,6 +134,7 @@ private:
 
   std::vector<double> linearVelFromAcc; // size of 3
   std::vector<double> linearVelFromJoint; // size of 3
+  std::vector<double> prevLinearVelFromJoint; // size of 3
 
   std::vector<double> linearDisFromAcc; // size of 3
   std::vector<double> linearDisFromAcc2; // size of 3
