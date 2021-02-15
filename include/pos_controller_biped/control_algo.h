@@ -3,6 +3,7 @@
 #include <math.h>
 #include <algorithm>
 #include <deque>
+#include <queue>
 #include "pos_controller_biped/pos_controller_biped.h"
 
 struct IMUData{
@@ -10,11 +11,31 @@ struct IMUData{
   double omega[3];
 };
 
-void xyTipPlacement(std::vector<double>& xyTipPos, const std::deque< std::vector<double> >& linearVelFromJoint);
+void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
+                          std::queue< std::vector<double> >& aveLinearVel,
+                          std::deque< std::vector<double> >& linearVelFromJoint);
+
+void xyTipPlacementInControl(double& prevVel,
+                             std::vector<double>& xyTipPos,
+                             std::vector<double>& xyTipPosTarget,
+                             std::queue< std::vector<double> >& aveLinearVel,
+                             std::deque< std::vector<double> >& linearVelFromJoint,
+                             const bool prevRightStandControl,
+                             const double retractionLength);
 
 void rightStandForControl(bool& rightStandControl, bool& dropping, bool& startTouch, const std::vector<double>& tipForce);
 
-void update_control(std::vector<double>& commands, const bool rightStandControl, const std::vector<double>& xyTipPos, const std::vector<hardware_interface::JointHandle>& joints_, const std::vector<double>& rpyImu, const ros::Time& time);
+void update_control(bool& prevRightStandControl,
+                    double& prevVel,
+                    std::vector<double>& commands, 
+                    std::vector<double>& xyTipPos, 
+                    std::vector<double>& xyTipPosTarget,
+                    std::queue< std::vector<double> >& aveLinearVel, 
+                    std::deque< std::vector<double> >& linearVelFromJoint,
+                    const bool rightStandControl, 
+                    const std::vector<hardware_interface::JointHandle>& joints_, 
+                    const std::vector<double>& rpyImu, 
+                    const ros::Time& time);
 
 void getJointVel(std::vector<double>& jointVel, std::deque< std::vector<double> >& jointPosCummulative, std::deque<uint64_t>& time_ms, const uint64_t curTime_msec, const std::vector<double>& jointPos);
 

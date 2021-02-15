@@ -56,6 +56,7 @@
 #include <math.h>
 #include <valarray>
 #include <deque>
+#include <queue>
 
 
 
@@ -136,10 +137,15 @@ private:
 
   //std::vector<double> linearVelFromJoint; // size of 3
   std::deque< std::vector<double> > linearVelFromJoint;
+  std::queue< std::vector<double> > aveLinearVel;
   //std::vector<double> prevLinearVelFromJoint; // size of 3
 
   std::vector<double> xyTipPos; // size of 2 (x and y)
+  std::vector<double> xyTipPosTarget; // size of 2 (x and y)
 
+  bool prevRightStandControl; // temporary
+
+  double prevVel;
 
   //std::vector<double> linearDisFromAcc; // size of 3
 

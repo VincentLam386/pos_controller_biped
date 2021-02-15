@@ -63,6 +63,8 @@ namespace pos_controller_biped_ns
     //prevLinearVelFromJoint.reserve(3);
     //linearDisFromAcc.reserve(3);
     xyTipPos.reserve(2);
+    xyTipPosTarget.reserve(2);
+    
     for(unsigned int i=0;i<3;++i){
       linearAcc.push_back(0.0);
       //linearVelFromAcc.push_back(0.0);
@@ -72,8 +74,11 @@ namespace pos_controller_biped_ns
     }
     for(unsigned int i=0;i<2;++i){
       xyTipPos.push_back(0.0);
+      xyTipPosTarget.push_back(0.0);
     }
-    
+   
+    //aveLinearVel.reserve(2);
+
   }
   GrpPosController::~GrpPosController() {sub_command_.shutdown();}
 
@@ -82,6 +87,7 @@ namespace pos_controller_biped_ns
     rightStandControl = false;
     dropping = false;
     startTouch = false;
+    prevRightStandControl = false; //temporary
 
     rpyImu.reserve(3);
 
@@ -298,11 +304,15 @@ namespace pos_controller_biped_ns
 
     /*--------------------------------------------------------------------------------------*/
     // Update desired position of links and torque for ABAD motor
-    xyTipPlacement(xyTipPos, linearVelFromJoint);
-
+    bool temp = rightStandControl;
     rightStandForControl(rightStandControl, dropping, startTouch, tipForce);
+    
+    /*if(rightStandControl != temp){
+      //std::cout << "Find tip placement" << std::endl;
+      xyTipPlacement(xyTipPos, linearVelFromJoint);
+    }*/
 
-    update_control(commands, rightStandControl, xyTipPos, joints_, rpyImu, time);
+    update_control(prevRightStandControl, prevVel, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, rightStandControl, joints_, rpyImu, time);
 
     /*--------------------------------------------------------------------------------------*/
     for(unsigned int i=0; i<n_joints_; i++)
