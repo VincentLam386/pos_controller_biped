@@ -56,7 +56,7 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-  GrpPosController::GrpPosController(): loop_count_(0){
+  GrpPosController::GrpPosController(): loop_count_(0), currentExt(0.0), targetExt(0.0){
     linearAcc.reserve(3);
     //linearVelFromAcc.reserve(3);
     //linearVelFromJoint.reserve(3);
@@ -312,7 +312,7 @@ namespace pos_controller_biped_ns
       xyTipPlacement(xyTipPos, linearVelFromJoint);
     }*/
 
-    update_control(prevRightStandControl, prevVel, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, rightStandControl, joints_, rpyImu, time);
+    update_control(prevRightStandControl, prevVel, currentExt, targetExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, rightStandControl, joints_, rpyImu, linksAngWithBase, time);
 
     /*--------------------------------------------------------------------------------------*/
     for(unsigned int i=0; i<n_joints_; i++)

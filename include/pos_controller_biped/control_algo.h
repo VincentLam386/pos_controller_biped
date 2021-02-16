@@ -11,22 +11,38 @@ struct IMUData{
   double omega[3];
 };
 
+void rightStandForControl(bool& rightStandControl, bool& dropping, bool& startTouch, const std::vector<double>& tipForce);
+
 void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
                           std::queue< std::vector<double> >& aveLinearVel,
                           std::deque< std::vector<double> >& linearVelFromJoint);
 
-void xyTipPlacementInControl(double& prevVel,
+/*void xyTipPlacementInControl(double& prevVel,
                              std::vector<double>& xyTipPos,
                              std::vector<double>& xyTipPosTarget,
                              std::queue< std::vector<double> >& aveLinearVel,
                              std::deque< std::vector<double> >& linearVelFromJoint,
                              const bool prevRightStandControl,
-                             const double retractionLength);
+                             const double retractionLength);*/
+void xyTipPlacementInControl_main(std::vector<double>& xyTipPos,
+                                  const std::vector<double>& xyTipPosTarget);
 
-void rightStandForControl(bool& rightStandControl, bool& dropping, bool& startTouch, const std::vector<double>& tipForce);
+void xyTipPlacementInControl_switch(std::vector<double>& xyTipPos,
+                                    std::vector<double>& xyTipPosTarget,
+                                    std::queue< std::vector<double> >& aveLinearVel,
+                                    std::deque< std::vector<double> >& linearVelFromJoint);
+ 
+double targetLegExtension(double thisAveLinearVel);
+
+void legExtensionInControl(double& currentExt, 
+                           bool rightStandControl, 
+                           double targetExt, 
+                           const std::vector<double>& linksAngWithBase);
 
 void update_control(bool& prevRightStandControl,
                     double& prevVel,
+                    double& currentExt,
+                    double& targetExt,
                     std::vector<double>& commands, 
                     std::vector<double>& xyTipPos, 
                     std::vector<double>& xyTipPosTarget,
@@ -35,6 +51,7 @@ void update_control(bool& prevRightStandControl,
                     const bool rightStandControl, 
                     const std::vector<hardware_interface::JointHandle>& joints_, 
                     const std::vector<double>& rpyImu, 
+                    const std::vector<double>& linksAngWithBase,
                     const ros::Time& time);
 
 void getJointVel(std::vector<double>& jointVel, std::deque< std::vector<double> >& jointPosCummulative, std::deque<uint64_t>& time_ms, const uint64_t curTime_msec, const std::vector<double>& jointPos);
