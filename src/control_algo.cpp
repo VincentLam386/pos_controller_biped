@@ -23,6 +23,7 @@ void rightStandForControl(bool& rightStandControl,
       } // if 
     } // else
   } // else
+
   //std::cout << rightStandControl << std::endl;
 
   return;
@@ -30,13 +31,19 @@ void rightStandForControl(bool& rightStandControl,
 
 void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
                           std::queue< std::vector<double> >& aveLinearVel,
-                          std::deque< std::vector<double> >& linearVelFromJoint){
-  const double kp = 0.15;
-  const double kd = 0.01; 
-  const double kv = 0.15;
-  const double maxX = 0.15;
-  double desired_vel[2] = { 1.0,0.0 };  // x direction, y direction
+                          std::deque< std::vector<double> >& linearVelFromJoint,
+                          const double* desired_vel,
+                          const double* tipPlacementK){
+  /*
+  Find the average velocity during a step -> fill in the aveLinearVel queue of size 2
+
+  Obtain average velocity of previous step and a step before previous, and
+
+  Calculate the target tip placement along x and y direction and make sure it is within the preset range (x direction only)
   
+  (test was done in x direction only)
+  */
+  const double maxX = 0.18;
   double diffVel[2] = {0.0, 0.0};
   std::vector<double> curVel {0.0, 0.0};
 
@@ -55,27 +62,33 @@ void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
   linearVelFromJoint.clear();
   
   for(unsigned int i=0; i<2; ++i){
-    xyTipPosTarget[i] = kp*(desired_vel[i]-curVel[i]) + kd*diffVel[i] + kv*curVel[i] ;
+    xyTipPosTarget[i] = tipPlacementK[0]*(desired_vel[i]-curVel[i]) + tipPlacementK[1]*diffVel[i] + tipPlacementK[2]*curVel[i] ;
   } // for
 
   if(aveLinearVel.size() > 1){
     aveLinearVel.pop();
   } // if
   aveLinearVel.push(curVel);
-
-  //std::cout << "Variable in x: " << (desired_vel[0]-curVel[0]) << " " << diffVel[0] << " " << curVel[0] << std::endl;
   
   //std::cout << "\nNew target pos: " << xyTipPosTarget[0] << " " << xyTipPosTarget[1]  << std::endl;
 
   xyTipPosTarget[0] = std::max(-maxX, std::min(maxX, xyTipPosTarget[0]));
 
-  std::cout << "Prev vs new ave x vel: " << aveLinearVel.front()[0] << " " << aveLinearVel.back()[0] << std::endl;
+  //std::cout << "Variable in x: " << (desired_vel[0]-curVel[0]) << " " << diffVel[0] << " " << curVel[0] << std::endl;
+
+  //std::cout << "Prev vs new ave x vel: " << aveLinearVel.front()[0] << " " << aveLinearVel.back()[0] << std::endl;
 
   return;
 } // targetXYTipPlacement
 
+/*----------------------------------------------------------------------------------------------*/
+
 void xyTipPlacementInControl_main(std::vector<double>& xyTipPos,
                                   const std::vector<double>& xyTipPosTarget){
+  /*
+  Move the leg tip progressively until it reach the target leg tip position when not switching leg
+  */
+
   double maxStep = 0.001;
 
   for(unsigned int i=0; i<xyTipPos.size(); ++i){
@@ -92,11 +105,21 @@ void xyTipPlacementInControl_main(std::vector<double>& xyTipPos,
   return;
 } // xyTipPlacementInControl_main
 
+/*----------------------------------------------------------------------------------------------*/
+
 void xyTipPlacementInControl_switch(std::vector<double>& xyTipPos,
                                     std::vector<double>& xyTipPosTarget,
                                     std::queue< std::vector<double> >& aveLinearVel,
-                                    std::deque< std::vector<double> >& linearVelFromJoint){
-  targetXYTipPlacement(xyTipPosTarget, aveLinearVel, linearVelFromJoint);
+                                    std::deque< std::vector<double> >& linearVelFromJoint,
+                                    const double* desired_vel,
+                                    const double* tipPlacementK){
+  /*
+  Call the targetXYTipPlacement function to obtain a new tip position, and
+
+  Switch the control of tip position with xyTipPos array by multiplying by -1
+  */
+
+  targetXYTipPlacement(xyTipPosTarget, aveLinearVel, linearVelFromJoint, desired_vel, tipPlacementK);
   for(unsigned int i=0; i<xyTipPos.size(); ++i){
     xyTipPos[i] *= -1;
   } // for
@@ -104,23 +127,36 @@ void xyTipPlacementInControl_switch(std::vector<double>& xyTipPos,
   return;
 } // xyTipPlacementInControl_switch
 
-double targetLegExtension(double thisAveLinearVel){
-  double desired_vel[2] = { 1.0,0.0 };  // x direction, y direction
-  double ke1 = 0.01;
-  double ke2 = 0.02;
-  return (ke1*desired_vel[0] + ke2*(desired_vel[0]-thisAveLinearVel));
+/*----------------------------------------------------------------------------------------------*/
+
+double targetLegExtension(double thisAveLinearVel,
+                          const double* desired_vel,
+                          const double* extK){
+  /*
+  Calculate the target leg extension at stance before launch
+  */
+
+  return (extK[0]*desired_vel[0] + extK[1]*(desired_vel[0]-thisAveLinearVel));
 } // legExtension
+
+/*----------------------------------------------------------------------------------------------*/
 
 void legExtensionInControl(std::vector<double>& currentExt, 
                            bool rightStandControl, 
                            double targetExt, 
+                           const double* desired_vel,
                            const std::vector<double>& linksAngWithBase){
+  /*
+  When the desired velocity is larger than the allowExtVel in magnitude, progressively increase leg extension at stance phase before launch (when the neutral leg is startExtAngle (currently 5 degree) away from the vertical), and
+
+  Progressively decrease leg extension at swing phase until it reach 0 extension
+  */
+
   bool extend = false;
   const double maxExt = 0.04;
   const double extStep = 0.0005;
-  const double startExtAngle = 5/180*3.14159;
+  const double startExtAngle = 5 /180*3.14159;
   const double allowExtVel = 0.5;
-  double desired_vel[2] = { 1.0,0.0 };  // x direction, y direction
 
   double neutralAngle = (linksAngWithBase[rightStandControl*3+1]-linksAngWithBase[rightStandControl*3])/2;
 
@@ -147,7 +183,9 @@ void legExtensionInControl(std::vector<double>& currentExt,
    
   return;
 
-} // legExtension
+} // legExtensionInControl
+
+/*----------------------------------------------------------------------------------------------*/
 
 // Implement the control algorithm here
 void update_control(bool& prevRightStandControl,
@@ -194,9 +232,10 @@ void update_control(bool& prevRightStandControl,
   double f2 = 0.0; // force threshold for swing phase
   double ratio = 0.0; 
 
-  // Get the current actual leg angles using ideal geometry
-  //float curLeftLegAngle = -joints_[2].getPosition() - joints_[3].getPosition()/2.0;
-  //float curRightLegAngle = -joints_[6].getPosition() - joints_[7].getPosition()/2.0;
+  double desired_vel[2] = { 1.2,0.0 };  // x direction, y direction
+  double tipPlacementK[3] = { 0.18, 0.01, 0.18 }; // kp, kd, kv
+  double extK[3] = { 0.01, 0.02 }; // ke1, ke2
+
   // Get the current actual hip pitch angles from IMU
   //float pitchToFront = 50.0 *(PI/180.0); // for program testing, input artificial pitch
   float pitchToFront = rpyImu[1];
@@ -204,16 +243,16 @@ void update_control(bool& prevRightStandControl,
 
   //if(rightStandControl != prevRightStandControl){
   if((retractionLength < 0) != prevRightStandControl){
-    xyTipPlacementInControl_switch(xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint);
+    xyTipPlacementInControl_switch(xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, desired_vel,tipPlacementK);
 
-    targetExt = targetLegExtension(aveLinearVel.back()[0]);
+    targetExt = targetLegExtension(aveLinearVel.back()[0],desired_vel,extK);
     //currentExt = 0;
     //std::cout << "Target extension: " << targetExt << std::endl;
   } // if true
   else {
     xyTipPlacementInControl_main(xyTipPos, xyTipPosTarget);
  
-    legExtensionInControl(currentExt,prevRightStandControl,targetExt,linksAngWithBase);
+    legExtensionInControl(currentExt,prevRightStandControl,targetExt,desired_vel, linksAngWithBase);
 
   } // else
 
@@ -462,7 +501,7 @@ void getLinearVelFromJoint(std::deque< std::vector<double> >& linearVelFromJoint
   
   //std::cout << linearVelFromJoint.size() << std::endl;
 
-  std::cout << linearVelFromJoint.back()[0] << " " << linearVelFromJoint.back()[1] << " " << linearVelFromJoint.back()[2] << "" << std::endl;
+  //std::cout << linearVelFromJoint.back()[0] << " " << linearVelFromJoint.back()[1] << " " << linearVelFromJoint.back()[2] << "" << std::endl;
 
 }
 

@@ -15,28 +15,28 @@ void rightStandForControl(bool& rightStandControl, bool& dropping, bool& startTo
 
 void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
                           std::queue< std::vector<double> >& aveLinearVel,
-                          std::deque< std::vector<double> >& linearVelFromJoint);
+                          std::deque< std::vector<double> >& linearVelFromJoint,
+                          const double* desired_vel,
+                          const double* tipPlacementK);
 
-/*void xyTipPlacementInControl(double& prevVel,
-                             std::vector<double>& xyTipPos,
-                             std::vector<double>& xyTipPosTarget,
-                             std::queue< std::vector<double> >& aveLinearVel,
-                             std::deque< std::vector<double> >& linearVelFromJoint,
-                             const bool prevRightStandControl,
-                             const double retractionLength);*/
 void xyTipPlacementInControl_main(std::vector<double>& xyTipPos,
                                   const std::vector<double>& xyTipPosTarget);
 
 void xyTipPlacementInControl_switch(std::vector<double>& xyTipPos,
                                     std::vector<double>& xyTipPosTarget,
                                     std::queue< std::vector<double> >& aveLinearVel,
-                                    std::deque< std::vector<double> >& linearVelFromJoint);
+                                    std::deque< std::vector<double> >& linearVelFromJoint,
+                                    const double* desired_vel,
+                                    const double* tipPlacementK);
  
-double targetLegExtension(double thisAveLinearVel);
+double targetLegExtension(double thisAveLinearVel,
+                          const double* desired_vel,
+                          const double* extK);
 
 void legExtensionInControl(std::vector<double>& currentExt, 
                            bool rightStandControl, 
                            double targetExt, 
+                           const double* desired_vel,
                            const std::vector<double>& linksAngWithBase);
 
 void update_control(bool& prevRightStandControl,
