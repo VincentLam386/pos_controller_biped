@@ -34,15 +34,15 @@ void xyTipPlacementInControl_switch(std::vector<double>& xyTipPos,
  
 double targetLegExtension(double thisAveLinearVel);
 
-void legExtensionInControl(double& currentExt, 
+void legExtensionInControl(std::vector<double>& currentExt, 
                            bool rightStandControl, 
                            double targetExt, 
                            const std::vector<double>& linksAngWithBase);
 
 void update_control(bool& prevRightStandControl,
                     double& prevVel,
-                    double& currentExt,
                     double& targetExt,
+                    std::vector<double>& currentExt,
                     std::vector<double>& commands, 
                     std::vector<double>& xyTipPos, 
                     std::vector<double>& xyTipPosTarget,

@@ -56,7 +56,7 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-  GrpPosController::GrpPosController(): loop_count_(0), currentExt(0.0), targetExt(0.0){
+  GrpPosController::GrpPosController(): loop_count_(0), targetExt(0.0){
     linearAcc.reserve(3);
     //linearVelFromAcc.reserve(3);
     //linearVelFromJoint.reserve(3);
@@ -64,7 +64,8 @@ namespace pos_controller_biped_ns
     //linearDisFromAcc.reserve(3);
     xyTipPos.reserve(2);
     xyTipPosTarget.reserve(2);
-    
+    currentExt.reserve(2);    
+
     for(unsigned int i=0;i<3;++i){
       linearAcc.push_back(0.0);
       //linearVelFromAcc.push_back(0.0);
@@ -75,6 +76,7 @@ namespace pos_controller_biped_ns
     for(unsigned int i=0;i<2;++i){
       xyTipPos.push_back(0.0);
       xyTipPosTarget.push_back(0.0);
+      currentExt.push_back(0.0);
     }
    
     //aveLinearVel.reserve(2);
@@ -312,7 +314,7 @@ namespace pos_controller_biped_ns
       xyTipPlacement(xyTipPos, linearVelFromJoint);
     }*/
 
-    update_control(prevRightStandControl, prevVel, currentExt, targetExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, rightStandControl, joints_, rpyImu, linksAngWithBase, time);
+    update_control(prevRightStandControl, prevVel, targetExt, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, rightStandControl, joints_, rpyImu, linksAngWithBase, time);
 
     /*--------------------------------------------------------------------------------------*/
     for(unsigned int i=0; i<n_joints_; i++)

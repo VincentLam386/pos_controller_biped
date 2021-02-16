@@ -147,7 +147,7 @@ private:
 
   double prevVel;
 
-  double currentExt;
+  std::vector<double> currentExt;
   double targetExt;
 
   //std::vector<double> linearDisFromAcc; // size of 3

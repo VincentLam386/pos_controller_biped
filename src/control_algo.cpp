@@ -31,9 +31,10 @@ void rightStandForControl(bool& rightStandControl,
 void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
                           std::queue< std::vector<double> >& aveLinearVel,
                           std::deque< std::vector<double> >& linearVelFromJoint){
-  const double kp = 0.1;
+  const double kp = 0.15;
   const double kd = 0.01; 
-  const double kv = 0.1;
+  const double kv = 0.15;
+  const double maxX = 0.15;
   double desired_vel[2] = { 1.0,0.0 };  // x direction, y direction
   
   double diffVel[2] = {0.0, 0.0};
@@ -62,31 +63,28 @@ void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
   } // if
   aveLinearVel.push(curVel);
 
-  //std::cout << "Variable in x: " << (curVel[0]-desired_vel[0]) << " " << diffVel[0] << " " << curVel[0] << std::endl;
+  //std::cout << "Variable in x: " << (desired_vel[0]-curVel[0]) << " " << diffVel[0] << " " << curVel[0] << std::endl;
   
   //std::cout << "\nNew target pos: " << xyTipPosTarget[0] << " " << xyTipPosTarget[1]  << std::endl;
 
-  //std::cout << "Prev vs new ave x vel: " << aveLinearVel.front()[0] << " " << aveLinearVel.back()[0] << std::endl;
+  xyTipPosTarget[0] = std::max(-maxX, std::min(maxX, xyTipPosTarget[0]));
+
+  std::cout << "Prev vs new ave x vel: " << aveLinearVel.front()[0] << " " << aveLinearVel.back()[0] << std::endl;
 
   return;
 } // targetXYTipPlacement
 
 void xyTipPlacementInControl_main(std::vector<double>& xyTipPos,
                                   const std::vector<double>& xyTipPosTarget){
-  double maxStep = 0.0003;
-  double maxX = 0.3;
+  double maxStep = 0.001;
 
   for(unsigned int i=0; i<xyTipPos.size(); ++i){
-    if(xyTipPosTarget[i] > 0){  
-      if(xyTipPos[i] < xyTipPosTarget[i]){
-        xyTipPos[i] += maxStep;
-      } // if
+    if(xyTipPos[i] > xyTipPosTarget[i]){  
+      xyTipPos[i] -= maxStep;
     } // if true
-    else {
-      if(xyTipPos[i] > xyTipPosTarget[i]){
-        xyTipPos[i] -= maxStep;
-      } // if
-    } // else
+    else if(xyTipPos[i] < xyTipPosTarget[i]){
+      xyTipPos[i] += maxStep;
+    } // else if true
   } // for
 
   //std::cout << "Tip control step: " << xyTipPos[0] << std::endl;
@@ -109,17 +107,17 @@ void xyTipPlacementInControl_switch(std::vector<double>& xyTipPos,
 double targetLegExtension(double thisAveLinearVel){
   double desired_vel[2] = { 1.0,0.0 };  // x direction, y direction
   double ke1 = 0.01;
-  double ke2 = 0.01;
+  double ke2 = 0.02;
   return (ke1*desired_vel[0] + ke2*(desired_vel[0]-thisAveLinearVel));
 } // legExtension
 
-void legExtensionInControl(double& currentExt, 
+void legExtensionInControl(std::vector<double>& currentExt, 
                            bool rightStandControl, 
                            double targetExt, 
                            const std::vector<double>& linksAngWithBase){
   bool extend = false;
   const double maxExt = 0.04;
-  const double extStep = 0.0002;
+  const double extStep = 0.0005;
   const double startExtAngle = 5/180*3.14159;
   const double allowExtVel = 0.5;
   double desired_vel[2] = { 1.0,0.0 };  // x direction, y direction
@@ -138,12 +136,14 @@ void legExtensionInControl(double& currentExt,
   } // else if true
 
   if(extend){
-    if(targetExt > currentExt){
-      currentExt = std::min(currentExt+extStep, maxExt);
-    } // if
+    if(targetExt > currentExt[rightStandControl]){
+      currentExt[rightStandControl] = std::min(currentExt[rightStandControl]+extStep, maxExt);
+    } // if true
   } // if true
 
-  //std::cout << "Current extension: " << currentExt << std::endl;
+  currentExt[(rightStandControl+1)%2] = std::max(currentExt[(rightStandControl+1)%2]-extStep, 0.0);
+
+  //std::cout << "Current extension: " << currentExt[0] << " " << currentExt[1] << std::endl;
    
   return;
 
@@ -152,8 +152,8 @@ void legExtensionInControl(double& currentExt,
 // Implement the control algorithm here
 void update_control(bool& prevRightStandControl,
                     double& prevVel,
-                    double& currentExt,
                     double& targetExt,
+                    std::vector<double>& currentExt,
                     std::vector<double>& commands, 
                     std::vector<double>& xyTipPos, 
                     std::vector<double>& xyTipPosTarget,
@@ -202,14 +202,12 @@ void update_control(bool& prevRightStandControl,
   float pitchToFront = rpyImu[1];
 
 
-  //xyTipPlacementInControl(prevVel, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, prevRightStandControl, retractionLength);
-
   //if(rightStandControl != prevRightStandControl){
   if((retractionLength < 0) != prevRightStandControl){
     xyTipPlacementInControl_switch(xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint);
 
     targetExt = targetLegExtension(aveLinearVel.back()[0]);
-    currentExt = 0;
+    //currentExt = 0;
     //std::cout << "Target extension: " << targetExt << std::endl;
   } // if true
   else {
@@ -221,15 +219,15 @@ void update_control(bool& prevRightStandControl,
 
   
   if (retractionLength < 0){
-    targetLegLength[0] = leg_0 + retractionLength;
-    targetLegLength[1] = leg_0 + currentExt;
+    targetLegLength[0] = leg_0 + retractionLength - currentExt[0];
+    targetLegLength[1] = leg_0 + currentExt[1];
 
     //std::cout << "Left tip x pos & length: " << xyTipPos[0] << " " << targetLegLength[0] << std::endl;
 
   } // if true
   else {
-    targetLegLength[0] = leg_0 + currentExt;
-    targetLegLength[1] = leg_0 - retractionLength;
+    targetLegLength[0] = leg_0 + currentExt[0];
+    targetLegLength[1] = leg_0 - retractionLength - currentExt[1];
 
   } // else
 
