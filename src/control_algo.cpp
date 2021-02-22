@@ -43,7 +43,7 @@ void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
   
   (test was done in x direction only)
   */
-  const double maxX = 0.18;
+  const double maxX = 0.15;
   double diffVel[2] = {0.0, 0.0};
   std::vector<double> curVel {0.0, 0.0};
 
@@ -89,7 +89,7 @@ void xyTipPlacementInControl_main(std::vector<double>& xyTipPos,
   Move the leg tip progressively until it reach the target leg tip position when not switching leg
   */
 
-  double maxStep = 0.001;
+  double maxStep = 0.0005;
 
   for(unsigned int i=0; i<xyTipPos.size(); ++i){
     if(xyTipPos[i] > xyTipPosTarget[i]){  
@@ -197,6 +197,7 @@ void update_control(bool& prevRightStandControl,
                     std::vector<double>& xyTipPosTarget,
                     std::queue< std::vector<double> >& aveLinearVel, 
                     std::deque< std::vector<double> >& linearVelFromJoint,
+                    const bool stop,
                     const bool rightStandControl, 
                     const std::vector<hardware_interface::JointHandle>& joints_, 
                     const std::vector<double>& rpyImu, 
@@ -220,10 +221,11 @@ void update_control(bool& prevRightStandControl,
   const double maxAngle = 2.0 *(PI/180.0);
   const double leg_0 = 0.47;     //neutral length of leg
   const double leg_maxRet = 0.1; //max retraction length of the leg
+  //const double angle_0 = acos((leg_0/2)/(0.26));
+  const double angle_0 = 0.0/180*PI;
  
   const double retractionLength = leg_maxRet * sin(2*PI*(stepFrequency/2.0)*time.toSec());
 
-  double forwardSpeed = 0.0;
   double targetLegLength[2] = {0.0, 0.0}; // left, right
   double targetLegAngle[2] =  {0.0,0.0}; // left, right
   double controlAngle[4] = {0.0,0.0, 0.0,0.0}; // left(miu,niu), right(miu,niu)
@@ -232,74 +234,83 @@ void update_control(bool& prevRightStandControl,
   double f2 = 0.0; // force threshold for swing phase
   double ratio = 0.0; 
 
-  double desired_vel[2] = { 1.2,0.0 };  // x direction, y direction
+  double desired_vel[2] = { 0.5,0.0 };  // x direction, y direction
   double tipPlacementK[3] = { 0.18, 0.01, 0.18 }; // kp, kd, kv
   double extK[3] = { 0.01, 0.02 }; // ke1, ke2
 
   // Get the current actual hip pitch angles from IMU
   //float pitchToFront = 50.0 *(PI/180.0); // for program testing, input artificial pitch
   float pitchToFront = rpyImu[1];
+  //std::cout << pitchToFront << std::endl;
 
+  if(!stop){
+    //if(rightStandControl != prevRightStandControl){
+    if((retractionLength < 0) != prevRightStandControl){
+      xyTipPlacementInControl_switch(xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, desired_vel,tipPlacementK);
 
-  //if(rightStandControl != prevRightStandControl){
-  if((retractionLength < 0) != prevRightStandControl){
-    xyTipPlacementInControl_switch(xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, desired_vel,tipPlacementK);
-
-    targetExt = targetLegExtension(aveLinearVel.back()[0],desired_vel,extK);
-    //currentExt = 0;
-    //std::cout << "Target extension: " << targetExt << std::endl;
-  } // if true
-  else {
-    xyTipPlacementInControl_main(xyTipPos, xyTipPosTarget);
+      //targetExt = targetLegExtension(aveLinearVel.back()[0],desired_vel,extK);
+      //currentExt = 0;
+      //std::cout << "Target extension: " << targetExt << std::endl;
+    } // if true
+    else {
+      xyTipPlacementInControl_main(xyTipPos, xyTipPosTarget);
  
-    legExtensionInControl(currentExt,prevRightStandControl,targetExt,desired_vel, linksAngWithBase);
+      //legExtensionInControl(currentExt,prevRightStandControl,targetExt,desired_vel, linksAngWithBase);
 
-  } // else
+    } // else
 
   
-  if (retractionLength < 0){
-    targetLegLength[0] = leg_0 + retractionLength - currentExt[0];
-    targetLegLength[1] = leg_0 + currentExt[1];
+    if (retractionLength < 0){
+      //targetLegLength[0] = leg_0 + retractionLength - currentExt[0];
+      //targetLegLength[1] = leg_0 + currentExt[1];
+      targetLegLength[0] = leg_0 + retractionLength;
+      targetLegLength[1] = leg_0 + targetExt;
 
-    //std::cout << "Left tip x pos & length: " << xyTipPos[0] << " " << targetLegLength[0] << std::endl;
+      //std::cout << "Left tip x pos & length: " << xyTipPos[0] << " " << targetLegLength[0] << std::endl;
 
-  } // if true
-  else {
-    targetLegLength[0] = leg_0 + currentExt[0];
-    targetLegLength[1] = leg_0 - retractionLength - currentExt[1];
+    } // if true
+    else {
+      targetLegLength[0] = leg_0 + targetExt;
+      targetLegLength[1] = leg_0 - retractionLength;
 
-  } // else
+    } // else
 
-  //if(rightStandControl){
-  if (retractionLength < 0) {
-    prevRightStandControl = true; // temporary 
-    controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]);
-    controlAngle[1] = -controlAngle[0];
+    //std::cout << xyTipPosTarget[0] << " " << xyTipPosTarget[1] << std::endl;
+    //if(rightStandControl){
+    if (retractionLength < 0) {
+      prevRightStandControl = true; // temporary 
+      controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]);
+      //controlAngle[0] = -asin(xyTipPosTarget[0]/targetLegLength[0]);
+      controlAngle[1] = -controlAngle[0];
 
-    controlAngle[2] = asin(xyTipPos[0]/targetLegLength[1]);
-    controlAngle[3] = -controlAngle[2]*1.0;
-    //controlAngle[2] = 0.0;
-    //controlAngle[3] = 0.0;
-  } // if true
-  else{   
-    prevRightStandControl = false; // temporary 
-    controlAngle[2] = -asin(xyTipPos[0]/targetLegLength[1]);
-    controlAngle[3] = -controlAngle[2];
+      controlAngle[2] = asin(xyTipPos[0]/targetLegLength[1]);
+      //controlAngle[2] = asin(xyTipPosTarget[0]/targetLegLength[1]);
+      controlAngle[3] = -controlAngle[2]*1.0;
+      //controlAngle[2] = 0.0;
+      //controlAngle[3] = 0.0;
+    } // if true
+    else{   
+      prevRightStandControl = false; // temporary 
+      controlAngle[2] = -asin(xyTipPos[0]/targetLegLength[1]);
+      //controlAngle[2] = -asin(xyTipPosTarget[0]/targetLegLength[1]);
+      controlAngle[3] = -controlAngle[2];
 
-    controlAngle[0] = asin(xyTipPos[0]/targetLegLength[0]);
-    controlAngle[1] = -controlAngle[0]*1.0;
-    //controlAngle[0] = 0.0;
-    //controlAngle[1] = 0.0;
-  } // else
-  //std::cout << "Left leg now: " << (curLeftLegAngle/PI*180) << " Left leg to be: " << (targetLeftLegAngle/PI*180) << "\n";
+      controlAngle[0] = asin(xyTipPos[0]/targetLegLength[0]);
+      //controlAngle[0] = asin(xyTipPosTarget[0]/targetLegLength[0]);
+      controlAngle[1] = -controlAngle[0]*1.0;
+      //controlAngle[0] = 0.0;
+      //controlAngle[1] = 0.0;
+    } // else
+    //std::cout << "Left leg now: " << (curLeftLegAngle/PI*180) << " Left leg to be: " << (targetLeftLegAngle/PI*180) << "\n";
 
-  controlAngle[0] += acos((targetLegLength[0]/2)/(0.26)) - 0.196;
-  controlAngle[1] += acos((targetLegLength[0]/2)/(0.26)) - 0.196;
-  controlAngle[2] += acos((targetLegLength[1]/2)/(0.26)) - 0.196; 
-  controlAngle[3] += acos((targetLegLength[1]/2)/(0.26)) - 0.196; 
+    controlAngle[0] += acos((targetLegLength[0]/2)/(0.26)) - PI/6;
+    controlAngle[1] += acos((targetLegLength[0]/2)/(0.26)) - PI/6;
+    controlAngle[2] += acos((targetLegLength[1]/2)/(0.26)) - PI/6; 
+    controlAngle[3] += acos((targetLegLength[1]/2)/(0.26)) - PI/6; 
 
-  //std::cout << controlAngle[0]/PI*180 << " " << controlAngle[1]/PI*180 << std::endl;
-  //std::cout << std::endl;
+    //std::cout << controlAngle[0]/PI*180 << " " << controlAngle[1]/PI*180 << std::endl;
+    //std::cout << std::endl;
+  }
 
   /*----------Update the joint angles below------------*/
   // left_abad_joint
@@ -309,10 +320,10 @@ void update_control(bool& prevRightStandControl,
   commands[1] = 0;
 
   // left spring rear joint
-  commands[2] = controlAngle[0];
+  commands[2] = (stop)? angle_0 : controlAngle[0];
 
   // left spring front joint
-  commands[3] = controlAngle[1];
+  commands[3] = (stop)? angle_0 : controlAngle[1];
 
   // left rear joint
   commands[4] = 0;
@@ -321,10 +332,10 @@ void update_control(bool& prevRightStandControl,
   commands[5] = 0;
 
   // right spring rear joint
-  commands[6] = controlAngle[2];
+  commands[6] = (stop)? angle_0 : controlAngle[2];
 
   // right spring front joint
-  commands[7] = controlAngle[3];
+  commands[7] = (stop)? angle_0 : controlAngle[3];
 
   // right rear joint
   commands[8] = 0;
@@ -370,6 +381,7 @@ void getJointVel(std::vector<double>& jointVel, std::deque< std::vector<double> 
       jointPosCummulative.push_back(jointPos);
     }
     // Estimate joint velocity
+    //std::cout << "Estimated: ";
     for(unsigned int i=0; i<jointVel.size(); ++i){
       // Use finte backward numerical differentiation (with different timesteps)
       //jointVel[i] = (3*(jointPosCummulative[2][i]-jointPosCummulative[1][i])/(2*(time_ms[2]-time_ms[1])) - ((jointPosCummulative[1][i]-jointPosCummulative[0][i])/(2*(time_ms[1]-time_ms[0]))))*1000;
@@ -379,7 +391,9 @@ void getJointVel(std::vector<double>& jointVel, std::deque< std::vector<double> 
 
       // Simple numerical differentiation with 15 time interval
       jointVel[i] = (jointPosCummulative[14][i]-jointPosCummulative[0][i])/(time_ms[14]-time_ms[0])*1000;
+      //std::cout << jointVel[i] << " ";
     }
+    //std::cout << std::endl;
   }
 
   //std::cout << jointVel[1]/PI*180 << " " << truejointVel[1]/PI*180 << " " << (jointVel[8]+jointVel[6])/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (jointVel[9]+jointVel[7])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << "" << std::endl;

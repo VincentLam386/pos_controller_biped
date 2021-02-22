@@ -56,7 +56,7 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-  GrpPosController::GrpPosController(): loop_count_(0), targetExt(0.0){
+  GrpPosController::GrpPosController(): loop_count_(0), targetExt(0.0), max_torque(35.0){
     linearAcc.reserve(3);
     //linearVelFromAcc.reserve(3);
     //linearVelFromJoint.reserve(3);
@@ -181,6 +181,7 @@ namespace pos_controller_biped_ns
   void GrpPosController::starting(const ros::Time& time)
   {
     curTime = ros::Time::now();
+    startTime = ros::Time::now();
     //std::cout << "Number of joints: " << n_joints_ << std::endl;
     ROS_INFO_STREAM("Number of joints = " << n_joints_  );
     std::vector<double> current_positions(n_joints_, 0.0);
@@ -275,10 +276,13 @@ namespace pos_controller_biped_ns
 
     /*--------------------------------------------------------------------------------------*/
     // Get joint position (assume encoder)  (and true joint velocity for testing)
+    //std::cout << "Joint vel: ";
     for(unsigned int i=0; i<n_joints_;++i){
       jointPos[i] = joints_[i].getPosition();
       truejointVel[i] = joints_[i].getVelocity();
+      //std::cout << truejointVel[i] << " ";
     }
+    //std::cout << std::endl;
     //std::cout << jointPos[1]/PI*180 << " " << (jointPos[8]+jointPos[6])/PI*180 << " " << (jointPos[9]+jointPos[7])/PI*180 << " ";
     //std::cout << truejointVel[1]/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << std::endl; 
 
@@ -314,8 +318,13 @@ namespace pos_controller_biped_ns
       xyTipPlacement(xyTipPos, linearVelFromJoint);
     }*/
 
-    update_control(prevRightStandControl, prevVel, targetExt, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, rightStandControl, joints_, rpyImu, linksAngWithBase, time);
+    //std::cout << (curTime-startTime).toSec() << std::endl;
+    bool stop = ((curTime-startTime).toSec()) < 0.2;
+    //bool stop = false;
 
+    update_control(prevRightStandControl, prevVel, targetExt, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, stop, rightStandControl, joints_, rpyImu, linksAngWithBase, time);
+
+    //std::cout << "Torque: ";
     /*--------------------------------------------------------------------------------------*/
     for(unsigned int i=0; i<n_joints_; i++)
     {
@@ -351,9 +360,16 @@ namespace pos_controller_biped_ns
         // Set the PID error and compute the PID command with nonuniform
         // time step size.
         commanded_effort = pid_controllers_[i].computeCommand(error, period);
+        //std::cout << commanded_effort << " ";
+
+        // Make sure the commanded torque is within allowable range
+        commanded_effort = std::max(-max_torque, std::min(max_torque, commanded_effort));
+        
+        //std::cout << commanded_effort << " ";
 
         joints_[i].setCommand(commanded_effort);
     }
+    //std::cout << std::endl;
     //if (loop_count_%updateAcc == 0){
     //  for (unsigned int i=0;i<3;++i){
     //    linearAcc[i] = 0;

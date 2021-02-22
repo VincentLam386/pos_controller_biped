@@ -102,6 +102,7 @@ private:
   //int updateAcc = 10;
   ros::Time lastTime;
   ros::Time curTime;
+  ros::Time startTime;
   ros::Duration dur;
   double dur_t;
   std::deque<uint64_t> time_ms;
@@ -110,6 +111,8 @@ private:
   bool rightStandControl;
   bool dropping;
   bool startTouch;
+  
+  double max_torque;
   ros::Subscriber sub_command_;
 
   std::vector<control_toolbox::Pid> pid_controllers_;       /**< Internal PID controllers. */
