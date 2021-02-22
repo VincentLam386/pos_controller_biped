@@ -53,6 +53,11 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
 
+#include <math.h>
+#include <valarray>
+#include <deque>
+#include <queue>
+
 
 
 namespace pos_controller_biped_ns
@@ -92,7 +97,22 @@ public:
   unsigned int n_joints_;
 
 private:
+  const double PI = 3.1415926535;
   int loop_count_;
+  //int updateAcc = 10;
+  ros::Time lastTime;
+  ros::Time curTime;
+  ros::Time startTime;
+  ros::Duration dur;
+  double dur_t;
+  std::deque<uint64_t> time_ms;
+  double niu;
+  bool rightStand;
+  bool rightStandControl;
+  bool dropping;
+  bool startTouch;
+  
+  double max_torque;
   ros::Subscriber sub_command_;
 
   std::vector<control_toolbox::Pid> pid_controllers_;       /**< Internal PID controllers. */
@@ -102,8 +122,39 @@ private:
   void commandCB(const std_msgs::Float64MultiArrayConstPtr& msg);
   void enforceJointLimits(double &command, unsigned int index);
 
+  std::vector<double> truejointVel; // size of 10
+  std::vector<double> jointPos; // size of 10
+  std::vector<double> jointVel; // size of 10
+  std::vector<double> linksAngWithBase; // size of 6 (left 3 (miu, niu, abad), right 3)
+  std::vector<double> linksVel; // size of 6 (left 3, right 3)
+
+  std::vector<double> springCoef; // size of 2 (front, rear)
+
+  std::vector<double> tipForce; // size of 4 (left (x,y), right (x,y))
+  
+  std::deque< std::vector<double> > jointPosCummulative; // size of 15
 
   std::vector<hardware_interface::ImuSensorHandle> sensors_;
+  std::vector<double> rpyImu; // size of 3
+  std::vector<double> linearAcc; // size of 3
+
+  //std::vector<double> linearVelFromJoint; // size of 3
+  std::deque< std::vector<double> > linearVelFromJoint;
+  std::queue< std::vector<double> > aveLinearVel;
+  //std::vector<double> prevLinearVelFromJoint; // size of 3
+
+  std::vector<double> xyTipPos; // size of 2 (x and y)
+  std::vector<double> xyTipPosTarget; // size of 2 (x and y)
+
+  bool prevRightStandControl; // temporary
+
+  double prevVel;
+
+  std::vector<double> currentExt;
+  double targetExt;
+
+  //std::vector<double> linearDisFromAcc; // size of 3
+
 }; // class
 
 } // namespace

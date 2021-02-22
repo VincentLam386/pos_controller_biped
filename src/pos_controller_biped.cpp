@@ -56,20 +56,54 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-  GrpPosController::GrpPosController(): loop_count_(0) {}
+  GrpPosController::GrpPosController(): loop_count_(0), targetExt(0.0), max_torque(35.0){
+    linearAcc.reserve(3);
+    //linearVelFromAcc.reserve(3);
+    //linearVelFromJoint.reserve(3);
+    //prevLinearVelFromJoint.reserve(3);
+    //linearDisFromAcc.reserve(3);
+    xyTipPos.reserve(2);
+    xyTipPosTarget.reserve(2);
+    currentExt.reserve(2);    
+
+    for(unsigned int i=0;i<3;++i){
+      linearAcc.push_back(0.0);
+      //linearVelFromAcc.push_back(0.0);
+      //linearVelFromJoint.push_back(0.0);
+      //prevLinearVelFromJoint.push_back(0.0);
+      //linearDisFromAcc.push_back(0.0);
+    }
+    for(unsigned int i=0;i<2;++i){
+      xyTipPos.push_back(0.0);
+      xyTipPosTarget.push_back(0.0);
+      currentExt.push_back(0.0);
+    }
+   
+    //aveLinearVel.reserve(2);
+
+  }
   GrpPosController::~GrpPosController() {sub_command_.shutdown();}
 
   bool GrpPosController::init(hardware_interface::RobotHW* robot_hw, ros::NodeHandle &n)
   {
+    rightStandControl = false;
+    dropping = false;
+    startTouch = false;
+    prevRightStandControl = false; //temporary
 
+    rpyImu.reserve(3);
 
     hardware_interface::EffortJointInterface* eff = robot_hw->get<hardware_interface::EffortJointInterface>();
     hardware_interface::ImuSensorInterface* imu = robot_hw->get<hardware_interface::ImuSensorInterface>();
 
-
-
+    // Set up spring coefficient
+    springCoef.reserve(2);
+    springCoef.push_back(154.6986);
+    springCoef.push_back(143.2394);
+    
     //IMU Portion
     const std::vector<std::string>& sensor_names = imu->getNames();
+    sensors_.reserve(sensor_names.size());
     for (unsigned i=0; i<sensor_names.size(); i++)
       ROS_DEBUG("Got sensor %s", sensor_names[i].c_str());
 
@@ -78,9 +112,6 @@ namespace pos_controller_biped_ns
       sensors_.push_back(imu->getHandle(sensor_names[i]));
     }
 
-
-
-
     // List of controlled joints
     if(!n.getParam("joints", joint_names_))
     {
@@ -88,6 +119,10 @@ namespace pos_controller_biped_ns
       return false;
     }
     n_joints_ = joint_names_.size();
+
+    truejointVel.resize(n_joints_);
+    jointPos.resize(n_joints_);
+    jointVel.resize(n_joints_);
 
     if(n_joints_ == 0){
       ROS_ERROR_STREAM("List of joint names is empty.");
@@ -103,6 +138,8 @@ namespace pos_controller_biped_ns
     }
 
     pid_controllers_.resize(n_joints_);
+    joint_urdfs_.reserve(n_joints_);
+    joints_.reserve(n_joints_);
 
     for(unsigned int i=0; i<n_joints_; i++)
     {
@@ -132,6 +169,7 @@ namespace pos_controller_biped_ns
         ROS_ERROR_STREAM("Failed to load PID parameters from " << joint_name + "/pid");
         return false;
       }
+
     }
 
     commands_buffer_.writeFromNonRT(std::vector<double>(n_joints_, 0.0));
@@ -142,6 +180,10 @@ namespace pos_controller_biped_ns
 
   void GrpPosController::starting(const ros::Time& time)
   {
+    curTime = ros::Time::now();
+    startTime = ros::Time::now();
+    //std::cout << "Number of joints: " << n_joints_ << std::endl;
+    ROS_INFO_STREAM("Number of joints = " << n_joints_  );
     std::vector<double> current_positions(n_joints_, 0.0);
     for (std::size_t i = 0; i < n_joints_; ++i)
     {
@@ -152,12 +194,138 @@ namespace pos_controller_biped_ns
     commands_buffer_.initRT(current_positions);
   }
 
+
+
   void GrpPosController::update(const ros::Time& time, const ros::Duration& period)
   {
     std::vector<double> & commands = *commands_buffer_.readFromRT();
+    lastTime = curTime;
+    curTime = ros::Time::now();
+    uint64_t curTime_msec = curTime.toNSec()/1000000;
+    dur = curTime-lastTime;
+    dur_t = dur.toSec();
+    //std::cout << dur_t << std::endl;
 
-    update_control(loop_count_, commands, joints_, time);
+    //IMU Portion
+    if (sensors_[0].getOrientation()){
+	   /*ROS_INFO_STREAM("Orientation X,Y,Z,W = "	<< sensors_[0].getOrientation()[0] <<", "
+							<< sensors_[0].getOrientation()[1] <<", "
+							<< sensors_[0].getOrientation()[2] <<", "
+							<< sensors_[0].getOrientation()[3] <<", "
+	   );*/
+	double roll,pitch,yaw;
+	tf2::Quaternion quat{sensors_[0].getOrientation()[0],
+		sensors_[0].getOrientation()[1], 
+		sensors_[0].getOrientation()[2], 
+		sensors_[0].getOrientation()[3], 
+	};
 
+	tf2::Matrix3x3(quat).getRPY(roll,pitch,yaw);
+	rpyImu[0] = roll; rpyImu[1] = pitch; rpyImu[2] = yaw;
+	
+	//ROS_INFO_STREAM("Orientation RPY = "	<< roll*(180.0/3.14159)<<"," <<pitch*(180.0/3.14159)<<", "<<yaw*(180.0/3.14159));
+	
+    }
+    else{
+ 	 ROS_WARN("No Orientation Data");
+    }	
+    
+    if (sensors_[0].getLinearAcceleration()){
+	   /*ROS_INFO_STREAM("Orientation X,Y,Z,W = "	<< sensors_[0].getOrientation()[0] <<", "
+							<< sensors_[0].getOrientation()[1] <<", "
+							<< sensors_[0].getOrientation()[2] <<", "
+							<< sensors_[0].getOrientation()[3] <<", "
+	   );*/
+
+	const double* acc = sensors_[0].getLinearAcceleration();
+	//std::valarray<double> newacc(acc);
+	//std::cout<< sizeof *acc / sizeof acc[0] << std::endl;
+	//std::vector<double> acc{ sensors_[0].getLinearAcceleration() };
+
+        /*if (loop_count_ > 1000){
+ 	  for (unsigned int i=0;i<3;++i){
+          //linearAcc[i] += acc[i];
+ 	  //if (loop_count_%updateAcc == 0){
+ 	    //linearAcc[i] /= updateAcc;
+	    //std::cout << (endAcc-startAcc) << std::endl;
+	    //std::cout << linearAcc[i] << " ";
+
+            linearDisFromAcc[i] = linearDisFromAcc[i] + linearVelFromAcc[i]*dur_t + acc[i]*dur_t*dur_t/2;
+            //linearDisFromAcc[i] = linearDisFromAcc[i] + linearVelFromAcc[i]*dur_t;
+            linearVelFromAcc[i] = linearVelFromAcc[i] + acc[i]*dur_t;
+
+            //std::cout << "Linear Vel " << i << ": " << linearVelFromAcc[i] << "  " << 
+            //     "Linear Dis " << i << ": " << linearDisFromAcc[i] << std::endl;
+ 	  //}
+	  //std::cout << acc[i] << " " << linearAcc[i] << " ";
+	  }
+        }*/
+
+        //if (loop_count_%updateAcc == 0){
+        //std::cout<< std::endl;
+	//}
+	//std::cout<< linearAcc[0] << " " << linearAcc[1] << " " << linearAcc[2] << std::endl;
+
+	//ROS_INFO_STREAM("Orientation RPY = "	<< roll*(180.0/3.14159)<<"," <<pitch*(180.0/3.14159)<<", "<<yaw*(180.0/3.14159));
+
+	
+    }
+    else{
+ 	 ROS_WARN("No linear acceleration data");
+    }	
+
+    /*--------------------------------------------------------------------------------------*/
+    // Get joint position (assume encoder)  (and true joint velocity for testing)
+    //std::cout << "Joint vel: ";
+    for(unsigned int i=0; i<n_joints_;++i){
+      jointPos[i] = joints_[i].getPosition();
+      truejointVel[i] = joints_[i].getVelocity();
+      //std::cout << truejointVel[i] << " ";
+    }
+    //std::cout << std::endl;
+    //std::cout << jointPos[1]/PI*180 << " " << (jointPos[8]+jointPos[6])/PI*180 << " " << (jointPos[9]+jointPos[7])/PI*180 << " ";
+    //std::cout << truejointVel[1]/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << std::endl; 
+
+    /*--------------------------------------------------------------------------------------*/
+    // Estimate joint velocity
+    getJointVel(jointVel, jointPosCummulative, time_ms, curTime_msec, jointPos);
+
+    /*--------------------------------------------------------------------------------------*/
+    // Get the angle position and velocity of the motor in world frame
+    linksAngleAndVel(linksAngWithBase,linksVel,  jointPos,jointVel);
+
+    /*--------------------------------------------------------------------------------------*/
+    // Get leg tip force in world frame
+    legTipForce(tipForce,  linksAngWithBase,jointPos,springCoef);
+
+    /*--------------------------------------------------------------------------------------*/
+    // Get linear velocity in world frame from joint position and velocity
+    rightStandForLinearVel(rightStand,tipForce); // determine if right(or left) leg is standing
+
+    /*for(unsigned int i=0; i<linearVelFromJoint.size(); ++i){
+      prevLinearVelFromJoint[i] = linearVelFromJoint[i];
+    }*/
+
+    getLinearVelFromJoint(linearVelFromJoint, rightStand, jointVel, jointPos);
+
+    /*--------------------------------------------------------------------------------------*/
+    // Update desired position of links and torque for ABAD motor
+    bool temp = rightStandControl;
+    rightStandForControl(rightStandControl, dropping, startTouch, tipForce);
+    
+    /*if(rightStandControl != temp){
+      //std::cout << "Find tip placement" << std::endl;
+      xyTipPlacement(xyTipPos, linearVelFromJoint);
+    }*/
+
+    //std::cout << (curTime-startTime).toSec() << std::endl;
+    bool stop = ((curTime-startTime).toSec()) < 0.2;
+    //bool stop = false;
+
+    update_control(prevRightStandControl, prevVel, targetExt, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, stop, rightStandControl, joints_, rpyImu, linksAngWithBase, time);
+
+    //std::cout << "Torque: ";
+    /*--------------------------------------------------------------------------------------*/
     for(unsigned int i=0; i<n_joints_; i++)
     {
         double command_position = commands[i];
@@ -165,7 +333,7 @@ namespace pos_controller_biped_ns
         double error;
         double commanded_effort;
 
-        double current_position = joints_[i].getPosition();
+        double current_position = jointPos[i];
 
         // Make sure joint is within limits if applicable
         enforceJointLimits(command_position, i);
@@ -192,36 +360,23 @@ namespace pos_controller_biped_ns
         // Set the PID error and compute the PID command with nonuniform
         // time step size.
         commanded_effort = pid_controllers_[i].computeCommand(error, period);
+        //std::cout << commanded_effort << " ";
+
+        // Make sure the commanded torque is within allowable range
+        commanded_effort = std::max(-max_torque, std::min(max_torque, commanded_effort));
+        
+        //std::cout << commanded_effort << " ";
 
         joints_[i].setCommand(commanded_effort);
     }
-
-
-   //IMU Portion
-   if (sensors_[0].getOrientation()){
-	   /*ROS_INFO_STREAM("Orientation X,Y,Z,W = "	<< sensors_[0].getOrientation()[0] <<", "
-							<< sensors_[0].getOrientation()[1] <<", "
-							<< sensors_[0].getOrientation()[2] <<", "
-							<< sensors_[0].getOrientation()[3] <<", "
-	   );*/
-	double roll,pitch,yaw;
-	tf2::Quaternion quat{	sensors_[0].getOrientation()[0],
-				sensors_[0].getOrientation()[1], 
-				sensors_[0].getOrientation()[2], 
-				sensors_[0].getOrientation()[3], 
-				};
-
-	tf2::Matrix3x3(quat).getRPY(roll,pitch,yaw);
-	
-	ROS_INFO_STREAM("Orientation RPY = "	<< roll*(180.0/3.14159)<<", "<<pitch*(180.0/3.14159)<<", "<<yaw*(180.0/3.14159));
-	
-   }
-   else{
-	ROS_WARN("No Orientation Data");
-   }	
-
-
+    //std::cout << std::endl;
+    //if (loop_count_%updateAcc == 0){
+    //  for (unsigned int i=0;i<3;++i){
+    //    linearAcc[i] = 0;
+    //  }
+    //}
     ++loop_count_;
+
   }
 
   void GrpPosController::commandCB(const std_msgs::Float64MultiArrayConstPtr& msg)
