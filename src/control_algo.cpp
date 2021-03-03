@@ -7,7 +7,7 @@ void rightStandForControl(bool& rightStandControl,
                           bool& dropping, 
                           bool& startTouch, 
                           const std::vector<double>& tipForce){
-  unsigned int forceIndex = (-rightStandControl*2)+3;
+  /*unsigned int forceIndex = (-rightStandControl*2)+3;
   if(!dropping){
     dropping = (tipForce[forceIndex] > 75);
   } // if true
@@ -22,7 +22,13 @@ void rightStandForControl(bool& rightStandControl,
         startTouch = false;
       } // if 
     } // else
-  } // else
+  } // else*/
+  if(tipForce[1] > 30){
+    //std::cout << "Left tip force > 30" << std::endl;
+  }
+  else if(tipForce[1] > 25){
+    //std::cout << "Left tip force > 25" << std::endl;
+  }
 
   //std::cout << rightStandControl << std::endl;
 
@@ -43,6 +49,7 @@ void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
   
   (test was done in x direction only)
   */
+  //const double maxX = 0.15;
   const double maxX = 0.15;
   double diffVel[2] = {0.0, 0.0};
   std::vector<double> curVel {0.0, 0.0};
@@ -62,7 +69,7 @@ void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
   linearVelFromJoint.clear();
   
   for(unsigned int i=0; i<2; ++i){
-    xyTipPosTarget[i] = tipPlacementK[0]*(desired_vel[i]-curVel[i]) + tipPlacementK[1]*diffVel[i] + tipPlacementK[2]*curVel[i] ;
+    xyTipPosTarget[i] = tipPlacementK[0]*(curVel[i]-desired_vel[i]) + tipPlacementK[1]*diffVel[i] + tipPlacementK[2]*curVel[i];
   } // for
 
   if(aveLinearVel.size() > 1){
@@ -191,6 +198,8 @@ void legExtensionInControl(std::vector<double>& currentExt,
 void update_control(bool& prevRightStandControl,
                     double& prevVel,
                     double& targetExt,
+                    double* targetPitch,
+                    double* controlPitch,
                     std::vector<double>& currentExt,
                     std::vector<double>& commands, 
                     std::vector<double>& xyTipPos, 
@@ -199,8 +208,10 @@ void update_control(bool& prevRightStandControl,
                     std::deque< std::vector<double> >& linearVelFromJoint,
                     const bool stop,
                     const bool rightStandControl, 
+                    const int loop_count_,
                     const std::vector<hardware_interface::JointHandle>& joints_, 
                     const std::vector<double>& rpyImu, 
+                    const std::vector<double>& rpyVel,
                     const std::vector<double>& linksAngWithBase,
                     const ros::Time& time){
   /* commands:    a vector storing the target positions for each joint
@@ -234,31 +245,57 @@ void update_control(bool& prevRightStandControl,
   double f2 = 0.0; // force threshold for swing phase
   double ratio = 0.0; 
 
-  double desired_vel[2] = { 0.5,0.0 };  // x direction, y direction
+  double desired_vel[2] = { 0.0,0.0 };  // x direction, y direction
   double tipPlacementK[3] = { 0.18, 0.01, 0.18 }; // kp, kd, kv
-  double extK[3] = { 0.01, 0.02 }; // ke1, ke2
+  double extK[2] = { 0.01, 0.02 }; // ke1, ke2
+  double pitchK[2] = { 80.0, 0.0 }; // kp, kv
+  double springAveK = 150.0;
+
+  double controlPitchStep[2] = { 0.0005, 0.0005 }; // stance, swing step
 
   // Get the current actual hip pitch angles from IMU
   //float pitchToFront = 50.0 *(PI/180.0); // for program testing, input artificial pitch
   float pitchToFront = rpyImu[1];
-  //std::cout << pitchToFront << std::endl;
 
   if(!stop){
     //if(rightStandControl != prevRightStandControl){
     if((retractionLength < 0) != prevRightStandControl){
       xyTipPlacementInControl_switch(xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, desired_vel,tipPlacementK);
 
+      targetPitch[(prevRightStandControl+1)%2] = 0; // previously swing, current stand phase
+      targetPitch[prevRightStandControl] = pitchToFront*2; // previously stand, current swing
+      
+      //xyTipPosTarget[(prevRightStandControl+1)%2] = 0;
+
+      //std::cout << std::endl;
+      //std::cout << xyTipPosTarget[0] << " " << xyTipPosTarget[1] << std::endl;
       //targetExt = targetLegExtension(aveLinearVel.back()[0],desired_vel,extK);
       //currentExt = 0;
       //std::cout << "Target extension: " << targetExt << std::endl;
     } // if true
     else {
+      if(loop_count_%100 == 0){
+        targetXYTipPlacement(xyTipPosTarget, aveLinearVel, linearVelFromJoint, desired_vel, tipPlacementK);
+        //std::cout << xyTipPosTarget[0] << " " << xyTipPosTarget[1] << std::endl;
+      }
       xyTipPlacementInControl_main(xyTipPos, xyTipPosTarget);
- 
+      //std::cout << xyTipPos[0] << std::endl;
+
+      targetPitch[prevRightStandControl] = 0; //-pitchToFront; // current stance phase
+      targetPitch[(prevRightStandControl+1)%2] = pitchToFront*2; // current swing phase
+      for(unsigned int i=0; i<2; ++i){
+        if(controlPitch[i] < targetPitch[i]){
+          controlPitch[i] += controlPitchStep[(prevRightStandControl+i)%2];
+        }
+        else if(controlPitch[i] > targetPitch[i]){
+          controlPitch[i] -= controlPitchStep[(prevRightStandControl+i)%2];
+        }
+      }
       //legExtensionInControl(currentExt,prevRightStandControl,targetExt,desired_vel, linksAngWithBase);
 
     } // else
-
+    //std::cout << "Target pitch: " << targetPitch[0] << " " << targetPitch[1] << std::endl;
+    //std::cout << controlPitch[0] << " " << controlPitch[1] << std::endl;
   
     if (retractionLength < 0){
       //targetLegLength[0] = leg_0 + retractionLength - currentExt[0];
@@ -275,32 +312,42 @@ void update_control(bool& prevRightStandControl,
 
     } // else
 
-    //std::cout << xyTipPosTarget[0] << " " << xyTipPosTarget[1] << std::endl;
+    //std::cout << prevRightStandControl << std::endl;
+    //xyTipPos[0] = 0.0;
+
     //if(rightStandControl){
     if (retractionLength < 0) {
       prevRightStandControl = true; // temporary 
-      controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]);
-      //controlAngle[0] = -asin(xyTipPosTarget[0]/targetLegLength[0]);
+      // Swing (left)
+      controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]) - controlPitch[0];
+      //controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]) + pitchToFront;
       controlAngle[1] = -controlAngle[0];
 
-      controlAngle[2] = asin(xyTipPos[0]/targetLegLength[1]);
-      //controlAngle[2] = asin(xyTipPosTarget[0]/targetLegLength[1]);
-      controlAngle[3] = -controlAngle[2]*1.0;
-      //controlAngle[2] = 0.0;
-      //controlAngle[3] = 0.0;
+      // Stand (right)
+      //controlAngle[2] = asin(xyTipPos[0]/targetLegLength[1]) - controlPitch[1];
+      //controlAngle[3] = -controlAngle[2]*1.0 + controlPitch[1];
+      //controlAngle[2] = -controlPitch[1];
+      //controlAngle[3] = controlPitch[1];
+      controlAngle[2] = 0.5*( (pitchK[0]*pitchToFront+pitchK[1]*rpyVel[1])/springAveK + linksAngWithBase[3] - linksAngWithBase[4] );
+      controlAngle[3] = -controlAngle[2];
     } // if true
     else{   
       prevRightStandControl = false; // temporary 
-      controlAngle[2] = -asin(xyTipPos[0]/targetLegLength[1]);
-      //controlAngle[2] = -asin(xyTipPosTarget[0]/targetLegLength[1]);
+     
+      // Swing (right)
+      controlAngle[2] = -asin(xyTipPos[0]/targetLegLength[1]) - controlPitch[1];
+      //controlAngle[2] = -asin(xyTipPos[0]/targetLegLength[1]) - pitchToFront;
       controlAngle[3] = -controlAngle[2];
 
-      controlAngle[0] = asin(xyTipPos[0]/targetLegLength[0]);
-      //controlAngle[0] = asin(xyTipPosTarget[0]/targetLegLength[0]);
-      controlAngle[1] = -controlAngle[0]*1.0;
-      //controlAngle[0] = 0.0;
-      //controlAngle[1] = 0.0;
+      // Stand (left)
+      //controlAngle[0] = asin(xyTipPos[0]/targetLegLength[0]) - controlPitch[0];
+      //controlAngle[1] = -controlAngle[0]*1.0 + controlPitch[0];
+      //controlAngle[0] = -controlPitch[0];
+      //controlAngle[1] = controlPitch[0];
+      controlAngle[0] = 0.5*( (pitchK[0]*pitchToFront+pitchK[1]*rpyVel[1])/springAveK + linksAngWithBase[0] - linksAngWithBase[1] );
+      controlAngle[1] = -controlAngle[0];
     } // else
+    std::cout << prevRightStandControl*10 << std::endl;
     //std::cout << "Left leg now: " << (curLeftLegAngle/PI*180) << " Left leg to be: " << (targetLeftLegAngle/PI*180) << "\n";
 
     controlAngle[0] += acos((targetLegLength[0]/2)/(0.26)) - PI/6;
@@ -308,7 +355,11 @@ void update_control(bool& prevRightStandControl,
     controlAngle[2] += acos((targetLegLength[1]/2)/(0.26)) - PI/6; 
     controlAngle[3] += acos((targetLegLength[1]/2)/(0.26)) - PI/6; 
 
-    //std::cout << controlAngle[0]/PI*180 << " " << controlAngle[1]/PI*180 << std::endl;
+    //std::cout << controlAngle[0]/PI*180 << " " << controlAngle[1]/PI*180 
+    //       << " " << controlAngle[2]/PI*180 << " " << controlAngle[3]/PI*180 << std::endl;
+    //std::cout << controlAngle[0] << " " << controlAngle[1] 
+    //      << " " << controlAngle[2] << " " << controlAngle[3] << std::endl;
+    //std::cout << (prevRightStandControl? "Right": "Left") << controlAngle[prevRightStandControl*2] << " " << controlAngle[prevRightStandControl*2+1] << std::endl;
     //std::cout << std::endl;
   }
 
@@ -346,58 +397,73 @@ void update_control(bool& prevRightStandControl,
   return;
 } // update_control
 
-void getJointVel(std::vector<double>& jointVel, std::deque< std::vector<double> >& jointPosCummulative, std::deque<uint64_t>& time_ms, const uint64_t curTime_msec, const std::vector<double>& jointPos){
-  if (jointPosCummulative.size() < 15) {
-    // Fill up the vectors of size 15
-    if (!time_ms.empty()){
-      if((time_ms.back() - curTime_msec) != 0) {
-        // Push back vector if timestamp is different
-        jointPosCummulative.push_back(jointPos);
-        time_ms.push_back(curTime_msec);
-      } 
-      else { 
-        // Replace last element with the new joint position when timestamp is the same as previous one
-        jointPosCummulative.pop_back();
-        jointPosCummulative.push_back(jointPos);
-      }
-    } 
-    else {
+bool cummulativeTimeUpdate(std::deque<uint64_t>& time_ms, 
+                           const unsigned int storedNum,
+                           const uint64_t curTime_msec){
+  bool timeUpdated = false;
+
+  if (time_ms.size() < storedNum) {
+    // Fill up the vectors of size (storedNum)
+    if (time_ms.empty()){
       // Start filling up vectors (very first time only)
-      jointPosCummulative.push_back(jointPos);
       time_ms.push_back(curTime_msec);
-    }
+      timeUpdated = true;
+    } else {
+      if(time_ms.back() != curTime_msec) {
+        // Push back vector if timestamp is different
+        time_ms.push_back(curTime_msec);
+        timeUpdated = true;
+      } 
+    } 
+  } else {
+    // Start estimating velocity and Allowing pop front when vectors have size (storedNum)
+    if(time_ms.back() != curTime_msec) {
+      // Pop front and push back when timestamp is different
+      time_ms.pop_front();
+      time_ms.push_back(curTime_msec);
+      timeUpdated = true;
+    } 
+  }
+  return timeUpdated;
+}
+
+void getVel(std::vector<double>& cumuVel, 
+                 std::deque< std::vector<double> >& cummulative, 
+                 const bool timeUpdated,
+                 const unsigned int storedNum,
+                 const std::vector<double>& newMeasure,
+                 const std::deque<uint64_t>& time_ms){
+  if (cummulative.size() < storedNum) {
+    // Fill up the vectors of size (storedNum)
+    // Replace last element with the new joint position when timestamp is the same as previous one
+    if(!timeUpdated) {    
+      cummulative.pop_back();
+    } 
+    cummulative.push_back(newMeasure);
   } 
   else {
-    // Start estimating velocity and Allowing pop front when vectors have size 15
-    if((time_ms.back() - curTime_msec) != 0) {
-      // Pop front and push back when timestamp is different
-      jointPosCummulative.pop_front();
-      time_ms.pop_front();
-      jointPosCummulative.push_back(jointPos);
-      time_ms.push_back(curTime_msec);
-    } else {
-      // Replace last element with the new joint position when timestamp is the same as previous one
-      jointPosCummulative.pop_back();
-      jointPosCummulative.push_back(jointPos);
+    // Start estimating velocity and Allowing pop front when vectors have size (storedNum)
+    // Pop front and push back when timestamp is different
+    // Or replace last element with the new joint position when timestamp is the same as previous one
+    if(timeUpdated) {
+      cummulative.pop_front();
+    } else { 
+      cummulative.pop_back();
     }
-    // Estimate joint velocity
-    //std::cout << "Estimated: ";
-    for(unsigned int i=0; i<jointVel.size(); ++i){
+    cummulative.push_back(newMeasure);
+
+    // Estimate velocity
+    for(unsigned int i=0; i<cumuVel.size(); ++i){
       // Use finte backward numerical differentiation (with different timesteps)
       //jointVel[i] = (3*(jointPosCummulative[2][i]-jointPosCummulative[1][i])/(2*(time_ms[2]-time_ms[1])) - ((jointPosCummulative[1][i]-jointPosCummulative[0][i])/(2*(time_ms[1]-time_ms[0]))))*1000;
 
       // Use simple numerical differentiation
       //jointVel[i] = (jointPosCummulative[2][i]-jointPosCummulative[1][i])/(time_ms[2]-time_ms[1])*1000; 
 
-      // Simple numerical differentiation with 15 time interval
-      jointVel[i] = (jointPosCummulative[14][i]-jointPosCummulative[0][i])/(time_ms[14]-time_ms[0])*1000;
-      //std::cout << jointVel[i] << " ";
+      // Simple numerical differentiation with (storedNum) time interval
+      cumuVel[i] = (cummulative.back()[i]-cummulative.front()[i])/(time_ms.back()-time_ms[time_ms.size()-storedNum])*1000;
     }
-    //std::cout << std::endl;
   }
-
-  //std::cout << jointVel[1]/PI*180 << " " << truejointVel[1]/PI*180 << " " << (jointVel[8]+jointVel[6])/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (jointVel[9]+jointVel[7])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << "" << std::endl;
-
   return;
 }
 
@@ -457,13 +523,20 @@ void legTipForce(std::vector<double>& tipForce,
     tipForce.push_back(force*cos(alpha));
   }
 
-  //std::cout << "Tip force: " << tipForce[0] << " " << tipForce[1] << "\n" << std::endl;
-  //std::cout << tipForce[1] << " " << tipForce[3] << " ";
+  std::cout << tipForce[0] << " " << tipForce[1] << " ";
+  std::cout << tipForce[2] << " " << tipForce[3] << " ";
 
   return;
 }
 
 void rightStandForLinearVel(bool& rightStand, const std::vector<double>& tipForce){
+  /* 
+  If right leg is previously standing, 
+  then if the current right leg tip force is smaller than (startSwingForceThreshold), 
+  it is considered that right leg leaves the ground now. 
+  The left leg is then considered as standing.
+  (same happens when left leg is previously standing)
+  */
   double startSwingForceThreshold = 5.0;
   if(rightStand){
     rightStand = ((tipForce[3] < startSwingForceThreshold) + 1)%2;
@@ -479,11 +552,10 @@ void rightStandForLinearVel(bool& rightStand, const std::vector<double>& tipForc
 void getLinearVelFromJoint(std::deque< std::vector<double> >& linearVelFromJoint, 
                            const bool& rightStand,
                            const std::vector<double>& jointVel, 
-                           const std::vector<double>& jointPos)
+                           const std::vector<double>& jointPos,
+                           const std::vector<double>& rpyVel,
+                           const std::vector<double>& rpyImu)
 {
-  /*if(linearVelFromJoint.size() >= 15){
-    linearVelFromJoint.pop_front();
-  }*/
   std::vector<double> curLinearVelFromJoint;
   curLinearVelFromJoint.reserve(3);
   const float r0 = 0.26;
@@ -491,11 +563,11 @@ void getLinearVelFromJoint(std::deque< std::vector<double> >& linearVelFromJoint
 
   // Calculate robot body linear velocity from joint position and velocity
   // (refer to the calculation in "velocity kinematic calculation.pptx")
-  double miu = jointPos[4+rightStand*4]+jointPos[2+rightStand*4];
-  double niu = jointPos[5+rightStand*4]+jointPos[3+rightStand*4];
+  double miu = jointPos[4+rightStand*4]+jointPos[2+rightStand*4] + rpyImu[1];
+  double niu = jointPos[5+rightStand*4]+jointPos[3+rightStand*4] - rpyImu[1];
   double lambda = jointPos[0+rightStand];
-  double miu_dot = jointVel[4+rightStand*4]+jointVel[2+rightStand*4];
-  double niu_dot = jointVel[5+rightStand*4]+jointVel[3+rightStand*4];
+  double miu_dot = jointVel[4+rightStand*4]+jointVel[2+rightStand*4] + rpyVel[1];
+  double niu_dot = jointVel[5+rightStand*4]+jointVel[3+rightStand*4] - rpyVel[1];
   double lambda_dot = jointVel[0+rightStand];
 
   // x-direction velocity

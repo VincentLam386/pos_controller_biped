@@ -56,31 +56,24 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-  GrpPosController::GrpPosController(): loop_count_(0), targetExt(0.0), max_torque(35.0){
+  GrpPosController::GrpPosController(): loop_count_(0), targetExt(0.0), max_torque(21.0){
     linearAcc.reserve(3);
-    //linearVelFromAcc.reserve(3);
-    //linearVelFromJoint.reserve(3);
-    //prevLinearVelFromJoint.reserve(3);
-    //linearDisFromAcc.reserve(3);
-    xyTipPos.reserve(2);
-    xyTipPosTarget.reserve(2);
-    currentExt.reserve(2);    
-
+    rpyImu.reserve(3);
+    rpyVel.reserve(3);
     for(unsigned int i=0;i<3;++i){
       linearAcc.push_back(0.0);
-      //linearVelFromAcc.push_back(0.0);
-      //linearVelFromJoint.push_back(0.0);
-      //prevLinearVelFromJoint.push_back(0.0);
-      //linearDisFromAcc.push_back(0.0);
+      rpyImu.push_back(0.0);
+      rpyVel.push_back(0.0);
     }
+
+    xyTipPos.reserve(2);
+    xyTipPosTarget.reserve(2);
+    currentExt.reserve(2);  
     for(unsigned int i=0;i<2;++i){
       xyTipPos.push_back(0.0);
       xyTipPosTarget.push_back(0.0);
       currentExt.push_back(0.0);
     }
-   
-    //aveLinearVel.reserve(2);
-
   }
   GrpPosController::~GrpPosController() {sub_command_.shutdown();}
 
@@ -90,8 +83,6 @@ namespace pos_controller_biped_ns
     dropping = false;
     startTouch = false;
     prevRightStandControl = false; //temporary
-
-    rpyImu.reserve(3);
 
     hardware_interface::EffortJointInterface* eff = robot_hw->get<hardware_interface::EffortJointInterface>();
     hardware_interface::ImuSensorInterface* imu = robot_hw->get<hardware_interface::ImuSensorInterface>();
@@ -287,8 +278,26 @@ namespace pos_controller_biped_ns
     //std::cout << truejointVel[1]/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << std::endl; 
 
     /*--------------------------------------------------------------------------------------*/
-    // Estimate joint velocity
-    getJointVel(jointVel, jointPosCummulative, time_ms, curTime_msec, jointPos);
+    // Estimate joint velocity & roll, pitch and yaw velocity
+    // Update time deque
+    timeUpdated = cummulativeTimeUpdate(time_ms, 15, curTime_msec);
+
+    // Estimate joint velocity (with time interval of 15 loops)
+    getVel(jointVel, jointPosCummulative, timeUpdated, 10, jointPos, time_ms);
+    /* Uncomment to verify joint speed estimation
+    if(!jointVel.empty()){
+      std::cout << time_ms.back() << " ";
+      std::cout << jointVel[4] << " " << truejointVel[4] << std::endl;
+    }*/
+
+    // Estimate roll, pitch and yaw velocity (with time interval of 5 loops)
+    getVel(rpyVel, rpyCummulative, timeUpdated, 10, rpyImu, time_ms);
+    /* Uncomment to verify pitch speed estimation
+    if(!rpyVel.empty()){
+      std::cout << time_ms.back() << " ";
+      std::cout << rpyVel[1] << " ";
+      std::cout << rpyImu[1] << std::endl;
+    }*/
 
     /*--------------------------------------------------------------------------------------*/
     // Get the angle position and velocity of the motor in world frame
@@ -306,7 +315,7 @@ namespace pos_controller_biped_ns
       prevLinearVelFromJoint[i] = linearVelFromJoint[i];
     }*/
 
-    getLinearVelFromJoint(linearVelFromJoint, rightStand, jointVel, jointPos);
+    getLinearVelFromJoint(linearVelFromJoint, rightStand, jointVel, jointPos, rpyVel, rpyImu);
 
     /*--------------------------------------------------------------------------------------*/
     // Update desired position of links and torque for ABAD motor
@@ -322,7 +331,7 @@ namespace pos_controller_biped_ns
     bool stop = ((curTime-startTime).toSec()) < 0.2;
     //bool stop = false;
 
-    update_control(prevRightStandControl, prevVel, targetExt, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, stop, rightStandControl, joints_, rpyImu, linksAngWithBase, time);
+    update_control(prevRightStandControl, prevVel, targetExt, targetPitch, controlPitch, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, stop, rightStandControl, loop_count_, joints_, rpyImu, rpyVel, linksAngWithBase, time);
 
     //std::cout << "Torque: ";
     /*--------------------------------------------------------------------------------------*/

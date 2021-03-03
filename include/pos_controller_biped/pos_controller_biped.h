@@ -111,6 +111,7 @@ private:
   bool rightStandControl;
   bool dropping;
   bool startTouch;
+  bool timeUpdated;
   
   double max_torque;
   ros::Subscriber sub_command_;
@@ -130,12 +131,15 @@ private:
 
   std::vector<double> springCoef; // size of 2 (front, rear)
 
-  std::vector<double> tipForce; // size of 4 (left (x,y), right (x,y))
+  std::vector<double> tipForce; // size of 4 (left (x,z), right (x,z))
   
   std::deque< std::vector<double> > jointPosCummulative; // size of 15
+  std::deque< std::vector<double> > rpyCummulative; // size of 15
 
   std::vector<hardware_interface::ImuSensorHandle> sensors_;
   std::vector<double> rpyImu; // size of 3
+  std::vector<double> rpyVel; // size of 3
+
   std::vector<double> linearAcc; // size of 3
 
   //std::vector<double> linearVelFromJoint; // size of 3
@@ -152,6 +156,9 @@ private:
 
   std::vector<double> currentExt;
   double targetExt;
+
+  double targetPitch[2] = { 0.0, 0.0 }; // left, right
+  double controlPitch[2] = { 0.0, 0.0 }; // left, right
 
   //std::vector<double> linearDisFromAcc; // size of 3
 
