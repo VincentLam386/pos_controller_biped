@@ -37,7 +37,7 @@ void legExtensionInControl(std::vector<double>& currentExt,
                            bool rightStandControl, 
                            double targetExt, 
                            const double* desired_vel,
-                           const std::vector<double>& linksAngWithBase);
+                           const std::vector<double>& linksAngWithVert);
 
 void update_control(bool& prevRightStandControl,
                     double& prevVel,
@@ -56,7 +56,7 @@ void update_control(bool& prevRightStandControl,
                     const std::vector<hardware_interface::JointHandle>& joints_, 
                     const std::vector<double>& rpyImu, 
                     const std::vector<double>& rpyVel,
-                    const std::vector<double>& linksAngWithBase,
+                    const std::vector<double>& linksAngWithVert,
                     const ros::Time& time);
 
 bool cummulativeTimeUpdate(std::deque<uint64_t>& time_ms, 
@@ -70,18 +70,21 @@ void getVel(std::vector<double>& cumuVel,
                  const std::vector<double>& newMeasure,
                  const std::deque<uint64_t>& time_ms);
 
-void linksAngleAndVel(std::vector<double>& linksAngWithBase, std::vector<double>& linksVel, const std::vector<double>& jointPos, const std::vector<double>& jointVel);
+void linksAngleAndVel(std::vector<double>& linksAngWithVert, 
+                      std::vector<double>& linksAngVel, 
+                      const std::vector<double>& jointPos, 
+                      const std::vector<double>& jointVel,
+                      const std::vector<double>& rpyImu,
+                      const std::vector<double>& rpyVel);
 
-void legTipForce(std::vector<double>& tipForce, const std::vector<double>& linksAngWithBase, const std::vector<double>& jointPos, const std::vector<double>& springCoef);
+void legTipForce(std::vector<double>& tipForce, const std::vector<double>& linksAngWithVert, const std::vector<double>& jointPos, const std::vector<double>& springCoef);
 
 void rightStandForLinearVel(bool& rightStand, const std::vector<double>& tipForce);
 
 void getLinearVelFromJoint(std::deque< std::vector<double> >& linearVelFromJoint, 
                            const bool& rightStand,
-                           const std::vector<double>& jointVel, 
-                           const std::vector<double>& jointPos,
-                           const std::vector<double>& rpyVel,
-                           const std::vector<double>& rpyImu);
+                           const std::vector<double>& linksAngWithVert,
+                           const std::vector<double>& linksAngVel);
 
 void rightStandForControl();
 

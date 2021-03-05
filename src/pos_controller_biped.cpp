@@ -56,7 +56,7 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-  GrpPosController::GrpPosController(): loop_count_(0), targetExt(0.0), max_torque(21.0){
+  GrpPosController::GrpPosController(): loop_count_(0), targetExt(0.0), max_torque(150.0){
     linearAcc.reserve(3);
     rpyImu.reserve(3);
     rpyVel.reserve(3);
@@ -284,16 +284,16 @@ namespace pos_controller_biped_ns
 
     // Estimate joint velocity (with time interval of 15 loops)
     getVel(jointVel, jointPosCummulative, timeUpdated, 10, jointPos, time_ms);
-    /* Uncomment to verify joint speed estimation
-    if(!jointVel.empty()){
+    // Uncomment to verify joint speed estimation
+    /*if(!jointVel.empty()){
       std::cout << time_ms.back() << " ";
       std::cout << jointVel[4] << " " << truejointVel[4] << std::endl;
     }*/
 
     // Estimate roll, pitch and yaw velocity (with time interval of 5 loops)
     getVel(rpyVel, rpyCummulative, timeUpdated, 10, rpyImu, time_ms);
-    /* Uncomment to verify pitch speed estimation
-    if(!rpyVel.empty()){
+    // Uncomment to verify pitch speed estimation
+    /*if(!rpyVel.empty()){
       std::cout << time_ms.back() << " ";
       std::cout << rpyVel[1] << " ";
       std::cout << rpyImu[1] << std::endl;
@@ -301,11 +301,11 @@ namespace pos_controller_biped_ns
 
     /*--------------------------------------------------------------------------------------*/
     // Get the angle position and velocity of the motor in world frame
-    linksAngleAndVel(linksAngWithBase,linksVel,  jointPos,jointVel);
+    linksAngleAndVel(linksAngWithVert,linksAngVel,  jointPos,jointVel, rpyImu,rpyVel);
 
     /*--------------------------------------------------------------------------------------*/
     // Get leg tip force in world frame
-    legTipForce(tipForce,  linksAngWithBase,jointPos,springCoef);
+    legTipForce(tipForce,  linksAngWithVert,jointPos,springCoef);
 
     /*--------------------------------------------------------------------------------------*/
     // Get linear velocity in world frame from joint position and velocity
@@ -315,7 +315,7 @@ namespace pos_controller_biped_ns
       prevLinearVelFromJoint[i] = linearVelFromJoint[i];
     }*/
 
-    getLinearVelFromJoint(linearVelFromJoint, rightStand, jointVel, jointPos, rpyVel, rpyImu);
+    getLinearVelFromJoint(linearVelFromJoint, rightStand, linksAngWithVert, linksAngVel);
 
     /*--------------------------------------------------------------------------------------*/
     // Update desired position of links and torque for ABAD motor
@@ -331,7 +331,7 @@ namespace pos_controller_biped_ns
     bool stop = ((curTime-startTime).toSec()) < 0.2;
     //bool stop = false;
 
-    update_control(prevRightStandControl, prevVel, targetExt, targetPitch, controlPitch, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, stop, rightStandControl, loop_count_, joints_, rpyImu, rpyVel, linksAngWithBase, time);
+    update_control(prevRightStandControl, prevVel, targetExt, targetPitch, controlPitch, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, stop, rightStandControl, loop_count_, joints_, rpyImu, rpyVel, linksAngWithVert, time);
 
     //std::cout << "Torque: ";
     /*--------------------------------------------------------------------------------------*/

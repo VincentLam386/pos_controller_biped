@@ -152,7 +152,7 @@ void legExtensionInControl(std::vector<double>& currentExt,
                            bool rightStandControl, 
                            double targetExt, 
                            const double* desired_vel,
-                           const std::vector<double>& linksAngWithBase){
+                           const std::vector<double>& linksAngWithVert){
   /*
   When the desired velocity is larger than the allowExtVel in magnitude, progressively increase leg extension at stance phase before launch (when the neutral leg is startExtAngle (currently 5 degree) away from the vertical), and
 
@@ -165,7 +165,7 @@ void legExtensionInControl(std::vector<double>& currentExt,
   const double startExtAngle = 5 /180*3.14159;
   const double allowExtVel = 0.5;
 
-  double neutralAngle = (linksAngWithBase[rightStandControl*3+1]-linksAngWithBase[rightStandControl*3])/2;
+  double neutralAngle = (linksAngWithVert[rightStandControl*3+1]-linksAngWithVert[rightStandControl*3])/2;
 
   if(desired_vel[0] > allowExtVel){
     if(neutralAngle < (-startExtAngle)){
@@ -212,7 +212,7 @@ void update_control(bool& prevRightStandControl,
                     const std::vector<hardware_interface::JointHandle>& joints_, 
                     const std::vector<double>& rpyImu, 
                     const std::vector<double>& rpyVel,
-                    const std::vector<double>& linksAngWithBase,
+                    const std::vector<double>& linksAngWithVert,
                     const ros::Time& time){
   /* commands:    a vector storing the target positions for each joint
                   to be updated in this function
@@ -236,6 +236,8 @@ void update_control(bool& prevRightStandControl,
   const double angle_0 = 0.0/180*PI;
  
   const double retractionLength = leg_maxRet * sin(2*PI*(stepFrequency/2.0)*time.toSec());
+  const double phaseSwitchConst = std::min( 1.0, std::max(retractionLength/leg_maxRet*3, -1.0));
+  //std::cout << phaseSwitchConst << std::endl;
 
   double targetLegLength[2] = {0.0, 0.0}; // left, right
   double targetLegAngle[2] =  {0.0,0.0}; // left, right
@@ -291,7 +293,7 @@ void update_control(bool& prevRightStandControl,
           controlPitch[i] -= controlPitchStep[(prevRightStandControl+i)%2];
         }
       }
-      //legExtensionInControl(currentExt,prevRightStandControl,targetExt,desired_vel, linksAngWithBase);
+      //legExtensionInControl(currentExt,prevRightStandControl,targetExt,desired_vel, linksAngWithVert);
 
     } // else
     //std::cout << "Target pitch: " << targetPitch[0] << " " << targetPitch[1] << std::endl;
@@ -318,6 +320,7 @@ void update_control(bool& prevRightStandControl,
     //if(rightStandControl){
     if (retractionLength < 0) {
       prevRightStandControl = true; // temporary 
+
       // Swing (left)
       controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]) - controlPitch[0];
       //controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]) + pitchToFront;
@@ -328,7 +331,7 @@ void update_control(bool& prevRightStandControl,
       //controlAngle[3] = -controlAngle[2]*1.0 + controlPitch[1];
       //controlAngle[2] = -controlPitch[1];
       //controlAngle[3] = controlPitch[1];
-      controlAngle[2] = 0.5*( (pitchK[0]*pitchToFront+pitchK[1]*rpyVel[1])/springAveK + linksAngWithBase[3] - linksAngWithBase[4] );
+      controlAngle[2] = 0.5*( (pitchK[0]*pitchToFront+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[3] - linksAngWithVert[4] );
       controlAngle[3] = -controlAngle[2];
     } // if true
     else{   
@@ -344,19 +347,20 @@ void update_control(bool& prevRightStandControl,
       //controlAngle[1] = -controlAngle[0]*1.0 + controlPitch[0];
       //controlAngle[0] = -controlPitch[0];
       //controlAngle[1] = controlPitch[0];
-      controlAngle[0] = 0.5*( (pitchK[0]*pitchToFront+pitchK[1]*rpyVel[1])/springAveK + linksAngWithBase[0] - linksAngWithBase[1] );
+      controlAngle[0] = 0.5*( (pitchK[0]*pitchToFront+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[0] - linksAngWithVert[1] );
       controlAngle[1] = -controlAngle[0];
     } // else
-    std::cout << prevRightStandControl*10 << std::endl;
+    //std::cout << prevRightStandControl*10 << std::endl;
+    //std::cout << (prevRightStandControl? "Control right stand":"") << std::endl;
     //std::cout << "Left leg now: " << (curLeftLegAngle/PI*180) << " Left leg to be: " << (targetLeftLegAngle/PI*180) << "\n";
+    std::cout << controlAngle[0]/PI*180 << " " << controlAngle[1]/PI*180 
+           << " " << controlAngle[2]/PI*180 << " " << controlAngle[3]/PI*180 << std::endl;
 
     controlAngle[0] += acos((targetLegLength[0]/2)/(0.26)) - PI/6;
     controlAngle[1] += acos((targetLegLength[0]/2)/(0.26)) - PI/6;
     controlAngle[2] += acos((targetLegLength[1]/2)/(0.26)) - PI/6; 
     controlAngle[3] += acos((targetLegLength[1]/2)/(0.26)) - PI/6; 
 
-    //std::cout << controlAngle[0]/PI*180 << " " << controlAngle[1]/PI*180 
-    //       << " " << controlAngle[2]/PI*180 << " " << controlAngle[3]/PI*180 << std::endl;
     //std::cout << controlAngle[0] << " " << controlAngle[1] 
     //      << " " << controlAngle[2] << " " << controlAngle[3] << std::endl;
     //std::cout << (prevRightStandControl? "Right": "Left") << controlAngle[prevRightStandControl*2] << " " << controlAngle[prevRightStandControl*2+1] << std::endl;
@@ -372,9 +376,11 @@ void update_control(bool& prevRightStandControl,
 
   // left spring rear joint
   commands[2] = (stop)? angle_0 : controlAngle[0];
+  //commands[2] = -15*PI/180.0;
 
   // left spring front joint
   commands[3] = (stop)? angle_0 : controlAngle[1];
+  //commands[3] = -15*PI/180.0;
 
   // left rear joint
   commands[4] = 0;
@@ -384,9 +390,11 @@ void update_control(bool& prevRightStandControl,
 
   // right spring rear joint
   commands[6] = (stop)? angle_0 : controlAngle[2];
+  //commands[6] = 20*PI/180.0;
 
   // right spring front joint
   commands[7] = (stop)? angle_0 : controlAngle[3];
+  //commands[7] = 20*PI/180.0;
 
   // right rear joint
   commands[8] = 0;
@@ -467,24 +475,26 @@ void getVel(std::vector<double>& cumuVel,
   return;
 }
 
-void linksAngleAndVel(std::vector<double>& linksAngWithBase, 
-                      std::vector<double>& linksVel, 
+void linksAngleAndVel(std::vector<double>& linksAngWithVert, 
+                      std::vector<double>& linksAngVel, 
                       const std::vector<double>& jointPos, 
-                      const std::vector<double>& jointVel)
+                      const std::vector<double>& jointVel,
+                      const std::vector<double>& rpyImu,
+                      const std::vector<double>& rpyVel)
 {
-  linksAngWithBase.clear();
-  linksVel.clear();
-  linksAngWithBase.reserve(3*2);
-  linksVel.reserve(3*2);
+  linksAngWithVert.clear();
+  linksAngVel.clear();
+  linksAngWithVert.reserve(3*2);
+  linksAngVel.reserve(3*2);
   for(unsigned int i=0; i<2; ++i){
-    linksAngWithBase.push_back( jointPos[4+i*4]+jointPos[2+i*4]+0.196 ); // 0.196 comes from xacro definition of the robot
-    linksAngWithBase.push_back( jointPos[5+i*4]+jointPos[3+i*4]+0.196 );
-    linksAngWithBase.push_back( jointPos[0+i] );
-    linksVel.push_back( jointVel[4+i*4]+jointVel[2+i*4] );
-    linksVel.push_back( jointVel[5+i*4]+jointVel[3+i*4] );
-    linksVel.push_back( jointVel[0+i] );
+    linksAngWithVert.push_back( jointPos[4+i*4]+jointPos[2+i*4]+rpyImu[1]+3.14159/6.0 ); // PI/6 comes from xacro definition of the robot // left miu
+    linksAngWithVert.push_back( jointPos[5+i*4]+jointPos[3+i*4]-rpyImu[1]+3.14159/6.0 ); // left niu
+    linksAngWithVert.push_back( jointPos[i] ); // left abad
+    linksAngVel.push_back( jointVel[4+i*4]+jointVel[2+i*4]+rpyVel[1] ); // right miu
+    linksAngVel.push_back( jointVel[5+i*4]+jointVel[3+i*4]-rpyVel[1] ); // right niu
+    linksAngVel.push_back( jointVel[i] ); // right abad
 
-    //std::cout << linksAngWithBase[i*3]/3.14159*180 << " " << linksAngWithBase[i*3+1]/3.14159*180 << " " << linksAngWithBase[i*3+2]/3.14159*180 << " ";
+    //std::cout << linksAngWithVert[i*3]/3.14159*180 << " " << linksAngWithVert[i*3+1]/3.14159*180 << " " << linksAngWithVert[i*3+2]/3.14159*180 << " ";
   }
   //std::cout << std::endl;
   
@@ -493,18 +503,19 @@ void linksAngleAndVel(std::vector<double>& linksAngWithBase,
 }
 
 void legTipForce(std::vector<double>& tipForce, 
-                 const std::vector<double>& linksAngWithBase, 
+                 const std::vector<double>& linksAngWithVert, 
                  const std::vector<double>& jointPos, 
                  const std::vector<double>& springCoef)
 {
   const double PI = 3.14159;
+  const double leg_mass_total = 0.34; // 4 leg links (0.08kg), 1 leg tip (0.02kg)
 
   // force on bottom links by top link (k*(link angle-spring angle)*link length)
   std::vector<double> force_rear{ springCoef[0]*jointPos[4]/0.26, springCoef[0]*jointPos[8]/0.26 }; // left, right
   std::vector<double> force_front{ springCoef[1]*jointPos[5]/0.2, springCoef[1]*jointPos[9]/0.2 }; // left, right
 
   // Angle theta on link AB in leg tip force calculation
-  std::vector<double> theta { PI/2-linksAngWithBase[0]-linksAngWithBase[1], PI/2-linksAngWithBase[3]-linksAngWithBase[4] }; // left, right
+  std::vector<double> theta { PI/2-linksAngWithVert[0]-linksAngWithVert[1], PI/2-linksAngWithVert[3]-linksAngWithVert[4] }; // left, right
   
   // Calculate leg tip force in link AB frame
   std::vector<double> linkForce; // left (x,y), right (x,y)
@@ -518,13 +529,16 @@ void legTipForce(std::vector<double>& tipForce,
   tipForce.reserve(theta.size()*2);
   for(unsigned int i=0; i<theta.size(); ++i){
     double force = sqrt(linkForce[i*2]*linkForce[i*2] + linkForce[i*2+1]*linkForce[i*2+1]);
-    double alpha = linksAngWithBase[i*3+1] - atan(linkForce[i*2+1]/linkForce[i*2]);
+    double alpha = linksAngWithVert[i*3+1] - atan(linkForce[i*2+1]/linkForce[i*2]);
     tipForce.push_back(-force*sin(alpha));
-    tipForce.push_back(force*cos(alpha));
+    tipForce.push_back(force*cos(alpha) + leg_mass_total*9.81);
   }
 
-  std::cout << tipForce[0] << " " << tipForce[1] << " ";
-  std::cout << tipForce[2] << " " << tipForce[3] << " ";
+  //std::cout << tipForce[0] << " " << tipForce[1] << " ";
+  //std::cout << tipForce[2] << " " << tipForce[3] << " ";
+  //std::cout << linkForce[0] << " " << linkForce[1] << " ";
+  //std::cout << force_rear[0]+force_front[0] << " " << force_rear[1]+force_front[1] << " ";
+  //std::cout << std::endl;
 
   return;
 }
@@ -545,16 +559,15 @@ void rightStandForLinearVel(bool& rightStand, const std::vector<double>& tipForc
   }
   
   //std::cout << "Right Stand: " << rightStand << std::endl;
+  //std::cout << rightStand*5 << " ";
 
   return;
 }
 
 void getLinearVelFromJoint(std::deque< std::vector<double> >& linearVelFromJoint, 
                            const bool& rightStand,
-                           const std::vector<double>& jointVel, 
-                           const std::vector<double>& jointPos,
-                           const std::vector<double>& rpyVel,
-                           const std::vector<double>& rpyImu)
+                           const std::vector<double>& linksAngWithVert,
+                           const std::vector<double>& linksAngVel)
 {
   std::vector<double> curLinearVelFromJoint;
   curLinearVelFromJoint.reserve(3);
@@ -563,12 +576,12 @@ void getLinearVelFromJoint(std::deque< std::vector<double> >& linearVelFromJoint
 
   // Calculate robot body linear velocity from joint position and velocity
   // (refer to the calculation in "velocity kinematic calculation.pptx")
-  double miu = jointPos[4+rightStand*4]+jointPos[2+rightStand*4] + rpyImu[1];
-  double niu = jointPos[5+rightStand*4]+jointPos[3+rightStand*4] - rpyImu[1];
-  double lambda = jointPos[0+rightStand];
-  double miu_dot = jointVel[4+rightStand*4]+jointVel[2+rightStand*4] + rpyVel[1];
-  double niu_dot = jointVel[5+rightStand*4]+jointVel[3+rightStand*4] - rpyVel[1];
-  double lambda_dot = jointVel[0+rightStand];
+  const double miu = linksAngWithVert[rightStand*3];
+  const double niu = linksAngWithVert[rightStand*3+1];
+  const double lambda = linksAngWithVert[rightStand*3+2];
+  const double miu_dot = linksAngVel[rightStand*3];
+  const double niu_dot = linksAngVel[rightStand*3+1];
+  const double lambda_dot = linksAngVel[rightStand*3+2];
 
   // x-direction velocity
   curLinearVelFromJoint.push_back(r0*cos(miu) *miu_dot -
