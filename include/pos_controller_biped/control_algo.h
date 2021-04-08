@@ -4,12 +4,15 @@
 #include <algorithm>
 #include <deque>
 #include <queue>
+#include <numeric>
 #include "pos_controller_biped/pos_controller_biped.h"
 
 struct IMUData{
   double acc[3];
   double omega[3];
 };
+
+void writeToFile(std::string msg);
 
 void rightStandForControl(bool& rightStandControl, bool& dropping, bool& startTouch, const std::vector<double>& tipForce);
 
@@ -40,6 +43,8 @@ void legExtensionInControl(std::vector<double>& currentExt,
                            const std::vector<double>& linksAngWithVert);
 
 void update_control(bool& prevRightStandControl,
+                    bool& swang,
+                    unsigned int& walkingState,
                     double& prevVel,
                     double& targetExt,
                     double* targetPitch,
@@ -57,7 +62,11 @@ void update_control(bool& prevRightStandControl,
                     const std::vector<double>& rpyImu, 
                     const std::vector<double>& rpyVel,
                     const std::vector<double>& linksAngWithVert,
-                    const ros::Time& time);
+                    const std::vector<double>& jointPos,
+                    const std::deque<double>& leftTipYForce,
+                    const std::deque<double>& rightTipYForce,
+                    const ros::Time& time,
+                    const double startControlTime);
 
 bool cummulativeTimeUpdate(std::deque<uint64_t>& time_ms, 
                            const unsigned int storedNum,
@@ -77,7 +86,25 @@ void linksAngleAndVel(std::vector<double>& linksAngWithVert,
                       const std::vector<double>& rpyImu,
                       const std::vector<double>& rpyVel);
 
-void legTipForce(std::vector<double>& tipForce, const std::vector<double>& linksAngWithVert, const std::vector<double>& jointPos, const std::vector<double>& springCoef);
+void legTipForce(std::vector<double>& tipForce, 
+                 std::deque<double>& leftTipYForce,
+                 std::deque<double>& rightTipYForce,
+                 unsigned int tipYForceSize,
+                 const std::vector<double>& linksAngWithVert, 
+                 const std::vector<double>& jointPos, 
+                 const std::vector<double>& springCoef);
+
+bool detectStance(const std::deque<double>& sideTipYForce);
+
+void singleSupportSwitch(bool& swang,
+                         unsigned int& walkingState, 
+                         double phaseSwitchConst,
+                         const std::deque<double>& oppTipYForce);
+
+void doubleSupportSwitch(unsigned int& walkingState, 
+                         bool rightToSwing, 
+                         double phaseSwitchConst,
+                         const std::vector<double>& jointPos);
 
 void rightStandForLinearVel(bool& rightStand, const std::vector<double>& tipForce);
 

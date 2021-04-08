@@ -56,7 +56,7 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-  GrpPosController::GrpPosController(): loop_count_(0), targetExt(0.0), max_torque(150.0){
+  GrpPosController::GrpPosController(): loop_count_(0), targetExt(0.0), max_torque(35), tipYForceSize(20+1), walkingState(0), swang(false) {
     linearAcc.reserve(3);
     rpyImu.reserve(3);
     rpyVel.reserve(3);
@@ -89,8 +89,10 @@ namespace pos_controller_biped_ns
 
     // Set up spring coefficient
     springCoef.reserve(2);
-    springCoef.push_back(154.6986);
-    springCoef.push_back(143.2394);
+    //springCoef.push_back(154.6986);
+    //springCoef.push_back(143.2394);
+    springCoef.push_back(550);
+    springCoef.push_back(540);
     
     //IMU Portion
     const std::vector<std::string>& sensor_names = imu->getNames();
@@ -171,8 +173,16 @@ namespace pos_controller_biped_ns
 
   void GrpPosController::starting(const ros::Time& time)
   {
+    std::ofstream myfile("test.txt", std::ios::out | std::ios::trunc);
+    if(myfile.is_open()){
+      myfile << "";
+    }
+    else std::cout << "Unable to open file" << std::endl;
+
+
     curTime = ros::Time::now();
-    startTime = ros::Time::now();
+    startTime = curTime;
+    lastTime = curTime;
     //std::cout << "Number of joints: " << n_joints_ << std::endl;
     ROS_INFO_STREAM("Number of joints = " << n_joints_  );
     std::vector<double> current_positions(n_joints_, 0.0);
@@ -189,9 +199,15 @@ namespace pos_controller_biped_ns
 
   void GrpPosController::update(const ros::Time& time, const ros::Duration& period)
   {
+    //std::cout << loop_count_ << " ";
+
     std::vector<double> & commands = *commands_buffer_.readFromRT();
-    lastTime = curTime;
+    
     curTime = ros::Time::now();
+    
+    if((curTime-lastTime).toSec() >= 0.001){
+    //std::cout << curTime.toSec() << std::endl;
+
     uint64_t curTime_msec = curTime.toNSec()/1000000;
     dur = curTime-lastTime;
     dur_t = dur.toSec();
@@ -272,10 +288,11 @@ namespace pos_controller_biped_ns
       jointPos[i] = joints_[i].getPosition();
       truejointVel[i] = joints_[i].getVelocity();
       //std::cout << truejointVel[i] << " ";
+      //writeToFile( std::to_string(truejointVel[i]) + " ");
     }
     //std::cout << std::endl;
     //std::cout << jointPos[1]/PI*180 << " " << (jointPos[8]+jointPos[6])/PI*180 << " " << (jointPos[9]+jointPos[7])/PI*180 << " ";
-    //std::cout << truejointVel[1]/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << std::endl; 
+    //std::cout << truejointVel[1] << " " << (truejointVel[8]+truejointVel[6]) << " " << (truejointVel[9]+truejointVel[7]) << " "; 
 
     /*--------------------------------------------------------------------------------------*/
     // Estimate joint velocity & roll, pitch and yaw velocity
@@ -286,8 +303,11 @@ namespace pos_controller_biped_ns
     getVel(jointVel, jointPosCummulative, timeUpdated, 10, jointPos, time_ms);
     // Uncomment to verify joint speed estimation
     /*if(!jointVel.empty()){
-      std::cout << time_ms.back() << " ";
-      std::cout << jointVel[4] << " " << truejointVel[4] << std::endl;
+      //std::cout << time_ms.back() << " ";
+      writeToFile( std::to_string(time_ms.back()) + " ");
+      //std::cout << jointVel[4] << " " << truejointVel[4] << std::endl;
+      writeToFile( std::to_string(jointVel[2]) + " " + std::to_string(truejointVel[2]) + " ");
+      writeToFile( std::to_string(jointVel[3]) + " " + std::to_string(truejointVel[3]) + " ");
     }*/
 
     // Estimate roll, pitch and yaw velocity (with time interval of 5 loops)
@@ -305,7 +325,10 @@ namespace pos_controller_biped_ns
 
     /*--------------------------------------------------------------------------------------*/
     // Get leg tip force in world frame
-    legTipForce(tipForce,  linksAngWithVert,jointPos,springCoef);
+    legTipForce(tipForce, leftTipYForce, rightTipYForce, tipYForceSize, linksAngWithVert, jointPos, springCoef);
+
+    //singleSupportSwitch(walkingState, leftTipYForce);
+    //doubleSupportSwitch(false, jointPos);
 
     /*--------------------------------------------------------------------------------------*/
     // Get linear velocity in world frame from joint position and velocity
@@ -328,12 +351,24 @@ namespace pos_controller_biped_ns
     }*/
 
     //std::cout << (curTime-startTime).toSec() << std::endl;
-    bool stop = ((curTime-startTime).toSec()) < 0.2;
+    double interval = 0.15;
+    bool stop = ((curTime-startTime).toSec()) < interval;
     //bool stop = false;
 
-    update_control(prevRightStandControl, prevVel, targetExt, targetPitch, controlPitch, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, stop, rightStandControl, loop_count_, joints_, rpyImu, rpyVel, linksAngWithVert, time);
+    temp = prevRightStandControl;
+    update_control(prevRightStandControl, swang, walkingState, prevVel, targetExt, targetPitch, controlPitch, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, stop, rightStandControl, loop_count_, joints_, rpyImu, rpyVel, linksAngWithVert, jointPos, leftTipYForce,rightTipYForce, time, startTime.toSec()+interval);
 
-    //std::cout << "Torque: ";
+    // Change PID parameters based on stance or swing phase
+    if(temp != prevRightStandControl){
+      pid_controllers_[prevRightStandControl].setGains(abadStancePid[0],abadStancePid[1], abadStancePid[2],0.0,0.0,false);
+      pid_controllers_[(prevRightStandControl+1)%2].setGains(abadSwingPid[0], abadSwingPid[1], abadSwingPid[2], 0.0,0.0,false);
+      pid_controllers_[prevRightStandControl*4+2].setGains(springStancePid[0], springStancePid[1], springStancePid[2], 0.0,0.0,false);
+      pid_controllers_[prevRightStandControl*4+3].setGains(springStancePid[0], springStancePid[1], springStancePid[2], 0.0,0.0,false);
+      pid_controllers_[((prevRightStandControl+1)%2)*4+2].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
+      pid_controllers_[((prevRightStandControl+1)%2)*4+3].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
+    }
+     
+
     /*--------------------------------------------------------------------------------------*/
     for(unsigned int i=0; i<n_joints_; i++)
     {
@@ -366,6 +401,8 @@ namespace pos_controller_biped_ns
           error = command_position - current_position;
         }
 
+        //std::cout << pid_controllers_[i].getGains().p_gain_ << " ";
+        
         // Set the PID error and compute the PID command with nonuniform
         // time step size.
         commanded_effort = pid_controllers_[i].computeCommand(error, period);
@@ -375,17 +412,25 @@ namespace pos_controller_biped_ns
         commanded_effort = std::max(-max_torque, std::min(max_torque, commanded_effort));
         
         //std::cout << commanded_effort << " ";
+        //writeToFile( std::to_string(commanded_effort) + " ");
 
         joints_[i].setCommand(commanded_effort);
     }
     //std::cout << std::endl;
+    writeToFile("\n");
     //if (loop_count_%updateAcc == 0){
     //  for (unsigned int i=0;i<3;++i){
     //    linearAcc[i] = 0;
     //  }
     //}
+
+
     ++loop_count_;
 
+    lastTime = curTime;
+    } // if
+
+    //controlFreq.sleep();
   }
 
   void GrpPosController::commandCB(const std_msgs::Float64MultiArrayConstPtr& msg)

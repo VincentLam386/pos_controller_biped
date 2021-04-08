@@ -58,6 +58,10 @@
 #include <deque>
 #include <queue>
 
+#include <iostream>
+#include <fstream>
+#include <string>
+
 
 
 namespace pos_controller_biped_ns
@@ -112,6 +116,7 @@ private:
   bool dropping;
   bool startTouch;
   bool timeUpdated;
+  unsigned int walkingState;
   
   double max_torque;
   ros::Subscriber sub_command_;
@@ -132,6 +137,10 @@ private:
   std::vector<double> springCoef; // size of 2 (front, rear)
 
   std::vector<double> tipForce; // size of 4 (left (x,z), right (x,z))
+  std::deque<double> leftTipYForce; 
+  std::deque<double> rightTipYForce;
+  unsigned int tipYForceSize;
+  bool swang;
   
   std::deque< std::vector<double> > jointPosCummulative; // size of 15
   std::deque< std::vector<double> > rpyCummulative; // size of 15
@@ -159,6 +168,11 @@ private:
 
   double targetPitch[2] = { 0.0, 0.0 }; // left, right
   double controlPitch[2] = { 0.0, 0.0 }; // left, right
+
+  double springStancePid[3] = { 400.0, 0.0, 0.1 };
+  double springSwingPid[3] = { 400.0, 0.0, 0.1 };
+  double abadStancePid[3] = { 200.0, 0.01, 1.2 };
+  double abadSwingPid[3] = { 200.0, 0.01, 1.2 };
 
   //std::vector<double> linearDisFromAcc; // size of 3
 
