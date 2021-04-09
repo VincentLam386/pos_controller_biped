@@ -263,8 +263,8 @@ void update_control(bool& prevRightStandControl,
   double desired_vel[2] = { 0.0,0.0 };  // x direction, y direction
   double tipPlacementK[3] = { 0.18, 0.0, 0.18 }; // kp, kd, kv
   double extK[2] = { 0.01, 0.02 }; // ke1, ke2
-  double pitchK[2] = { 50.0, 5.0 }; // kp, kv
-  double springAveK = 545.0;
+  double pitchK[2] = { 13.3, 1.33 }; // kp, kv
+  double springAveK = 145.0;
 
   double controlPitchStep[2] = { 0.005, 0.005 }; // stance, swing step
 

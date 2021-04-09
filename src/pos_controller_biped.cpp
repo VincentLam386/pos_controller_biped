@@ -91,8 +91,8 @@ namespace pos_controller_biped_ns
     springCoef.reserve(2);
     //springCoef.push_back(154.6986);
     //springCoef.push_back(143.2394);
-    springCoef.push_back(550);
-    springCoef.push_back(540);
+    springCoef.push_back(150);
+    springCoef.push_back(140);
     
     //IMU Portion
     const std::vector<std::string>& sensor_names = imu->getNames();
