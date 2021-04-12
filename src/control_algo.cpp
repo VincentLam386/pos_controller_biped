@@ -43,7 +43,7 @@ void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
   
   (test was done in x direction only)
   */
-  const double maxX = 0.15;
+  const double maxX = 0.16;
   double diffVel[2] = {0.0, 0.0};
   std::vector<double> curVel {0.0, 0.0};
 
@@ -62,7 +62,7 @@ void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
   linearVelFromJoint.clear();
   
   for(unsigned int i=0; i<2; ++i){
-    xyTipPosTarget[i] = tipPlacementK[0]*(desired_vel[i]-curVel[i]) + tipPlacementK[1]*diffVel[i] + tipPlacementK[2]*curVel[i] ;
+    xyTipPosTarget[i] = tipPlacementK[0]*(desired_vel[i]-curVel[i]) + tipPlacementK[1]*diffVel[i] + tipPlacementK[2]*curVel[i] - 0.012;
   } // for
 
   if(aveLinearVel.size() > 1){
@@ -89,14 +89,16 @@ void xyTipPlacementInControl_main(std::vector<double>& xyTipPos,
   Move the leg tip progressively until it reach the target leg tip position when not switching leg
   */
 
-  double maxStep = 0.0005;
+  double maxStep = 0.0005;  // fix pitch
+  //double maxStep = 0.001;  // free pitch
 
   for(unsigned int i=0; i<xyTipPos.size(); ++i){
-    if(xyTipPos[i] > xyTipPosTarget[i]){  
-      xyTipPos[i] -= maxStep;
+    double err = xyTipPos[i] - xyTipPosTarget[i];
+    if(err > 0){  
+      xyTipPos[i] -= std::min(err,maxStep);
     } // if true
-    else if(xyTipPos[i] < xyTipPosTarget[i]){
-      xyTipPos[i] += maxStep;
+    else if(err < 0){
+      xyTipPos[i] += std::min(-err,maxStep);
     } // else if true
   } // for
 
