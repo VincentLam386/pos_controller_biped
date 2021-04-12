@@ -56,27 +56,25 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-  GrpPosController::GrpPosController(): loop_count_(0), targetExt(0.0), max_torque(35.0){
+  GrpPosController::GrpPosController(): loop_count_(0), max_torque(35.0){
     linearAcc.reserve(3);
     //linearVelFromAcc.reserve(3);
-    //linearVelFromJoint.reserve(3);
-    //prevLinearVelFromJoint.reserve(3);
+    //linearVelFromLink.reserve(3);
+    //prevLinearVelFromLink.reserve(3);
     //linearDisFromAcc.reserve(3);
     xyTipPos.reserve(2);
     xyTipPosTarget.reserve(2);
-    currentExt.reserve(2);    
 
     for(unsigned int i=0;i<3;++i){
       linearAcc.push_back(0.0);
       //linearVelFromAcc.push_back(0.0);
-      //linearVelFromJoint.push_back(0.0);
-      //prevLinearVelFromJoint.push_back(0.0);
+      //linearVelFromLink.push_back(0.0);
+      //prevLinearVelFromLink.push_back(0.0);
       //linearDisFromAcc.push_back(0.0);
     }
     for(unsigned int i=0;i<2;++i){
       xyTipPos.push_back(0.0);
       xyTipPosTarget.push_back(0.0);
-      currentExt.push_back(0.0);
     }
    
     //aveLinearVel.reserve(2);
@@ -86,10 +84,7 @@ namespace pos_controller_biped_ns
 
   bool GrpPosController::init(hardware_interface::RobotHW* robot_hw, ros::NodeHandle &n)
   {
-    rightStandControl = false;
-    dropping = false;
-    startTouch = false;
-    prevRightStandControl = false; //temporary
+    prevRightStandControl = false;
 
     rpyImu.reserve(3);
 
@@ -199,12 +194,8 @@ namespace pos_controller_biped_ns
   void GrpPosController::update(const ros::Time& time, const ros::Duration& period)
   {
     std::vector<double> & commands = *commands_buffer_.readFromRT();
-    lastTime = curTime;
     curTime = ros::Time::now();
     uint64_t curTime_msec = curTime.toNSec()/1000000;
-    dur = curTime-lastTime;
-    dur_t = dur.toSec();
-    //std::cout << dur_t << std::endl;
 
     //IMU Portion
     if (sensors_[0].getOrientation()){
@@ -280,51 +271,40 @@ namespace pos_controller_biped_ns
     for(unsigned int i=0; i<n_joints_;++i){
       jointPos[i] = joints_[i].getPosition();
       truejointVel[i] = joints_[i].getVelocity();
-      //std::cout << truejointVel[i] << " ";
     }
-    //std::cout << std::endl;
-    //std::cout << jointPos[1]/PI*180 << " " << (jointPos[8]+jointPos[6])/PI*180 << " " << (jointPos[9]+jointPos[7])/PI*180 << " ";
-    //std::cout << truejointVel[1]/PI*180 << " " << (truejointVel[8]+truejointVel[6])/PI*180 << " " << (truejointVel[9]+truejointVel[7])/PI*180 << std::endl; 
 
     /*--------------------------------------------------------------------------------------*/
     // Estimate joint velocity
-    getJointVel(jointVel, jointPosCummulative, time_ms, curTime_msec, jointPos);
+    // Update time deque
+    timeUpdated = cummulativeTimeUpdate(time_ms, 15, curTime_msec);
+
+    // Estimate joint velocity (with time interval of 10 loops)
+    getVel(jointVel, jointPosCummulative, timeUpdated, 10, jointPos, time_ms);
+
+    // Estimate roll, pitch and yaw velocity (with time interval of 10 loops)
+    getVel(rpyVel, rpyCummulative, timeUpdated, 10, rpyImu, time_ms);
 
     /*--------------------------------------------------------------------------------------*/
     // Get the angle position and velocity of the motor in world frame
-    linksAngleAndVel(linksAngWithBase,linksVel,  jointPos,jointVel);
+    linksAngleAndVel(linksAngWithVert,linksAngVel,  jointPos,jointVel);
 
     /*--------------------------------------------------------------------------------------*/
     // Get leg tip force in world frame
-    legTipForce(tipForce,  linksAngWithBase,jointPos,springCoef);
+    legTipForce(tipForce,  linksAngWithVert,jointPos,springCoef);
 
     /*--------------------------------------------------------------------------------------*/
     // Get linear velocity in world frame from joint position and velocity
     rightStandForLinearVel(rightStand,tipForce); // determine if right(or left) leg is standing
 
-    /*for(unsigned int i=0; i<linearVelFromJoint.size(); ++i){
-      prevLinearVelFromJoint[i] = linearVelFromJoint[i];
-    }*/
-
-    getLinearVelFromJoint(linearVelFromJoint, rightStand, jointVel, jointPos);
+    getLinearVelFromLink(linearVelFromLink, rightStand, linksAngWithVert, linksAngVel);
 
     /*--------------------------------------------------------------------------------------*/
-    // Update desired position of links and torque for ABAD motor
-    bool temp = rightStandControl;
-    rightStandForControl(rightStandControl, dropping, startTouch, tipForce);
-    
-    /*if(rightStandControl != temp){
-      //std::cout << "Find tip placement" << std::endl;
-      xyTipPlacement(xyTipPos, linearVelFromJoint);
-    }*/
+    // Get the updated set of joints for the motor to move to
+    double interval = 0.2;
+    bool stop = ((curTime-startTime).toSec()) < interval;
 
-    //std::cout << (curTime-startTime).toSec() << std::endl;
-    bool stop = ((curTime-startTime).toSec()) < 0.2;
-    //bool stop = false;
+    update_control(prevRightStandControl, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromLink, stop, rpyImu, time, startTime.toSec()+interval);
 
-    update_control(prevRightStandControl, prevVel, targetExt, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, stop, rightStandControl, joints_, rpyImu, linksAngWithBase, time);
-
-    //std::cout << "Torque: ";
     /*--------------------------------------------------------------------------------------*/
     for(unsigned int i=0; i<n_joints_; i++)
     {
@@ -360,21 +340,13 @@ namespace pos_controller_biped_ns
         // Set the PID error and compute the PID command with nonuniform
         // time step size.
         commanded_effort = pid_controllers_[i].computeCommand(error, period);
-        //std::cout << commanded_effort << " ";
 
         // Make sure the commanded torque is within allowable range
         commanded_effort = std::max(-max_torque, std::min(max_torque, commanded_effort));
-        
-        //std::cout << commanded_effort << " ";
 
         joints_[i].setCommand(commanded_effort);
     }
-    //std::cout << std::endl;
-    //if (loop_count_%updateAcc == 0){
-    //  for (unsigned int i=0;i<3;++i){
-    //    linearAcc[i] = 0;
-    //  }
-    //}
+
     ++loop_count_;
 
   }
