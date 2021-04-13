@@ -6,6 +6,8 @@
 #include <queue>
 #include "pos_controller_biped/pos_controller_biped.h"
 
+int boolToSgn(bool in);
+
 void getAverageLinearVel(std::queue< std::array<double,2> >& aveLinearVel,
                          const std::deque< std::array<double,3> >& linearVelFromLink);
 

@@ -3,6 +3,10 @@
 #include "ros/ros.h"
 #include <ros/console.h>
 
+int boolToSgn(bool in){
+  return -1+in*2;
+}
+
 void getAverageLinearVel(std::queue< std::array<double,2> >& aveLinearVel,
                          const std::deque< std::array<double,3> >& linearVelFromLink){
   std::array<double,2> curVel {0.0, 0.0};
@@ -46,7 +50,7 @@ void targetXYTipPlacement(std::array<double,2>& xyTipPosTarget,
   // Update target leg tip position
   std::array<double,2> curVel = aveLinearVel.back();  
   for(unsigned int i=0; i<2; ++i){
-    xyTipPosTarget[i] = (-1*fixPitch)*tipPlacementK[0]*(curVel[i]-desired_vel[i]) + 
+    xyTipPosTarget[i] = boolToSgn(fixPitch)*tipPlacementK[0]*(desired_vel[i]-curVel[i]) + 
                         tipPlacementK[1]*(curVel[i]-aveLinearVel.front()[i]) +
                         tipPlacementK[2]*curVel[i] - 0.012;
   } // for
