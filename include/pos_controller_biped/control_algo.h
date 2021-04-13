@@ -6,29 +6,25 @@
 #include <queue>
 #include "pos_controller_biped/pos_controller_biped.h"
 
-void targetXYTipPlacement(std::vector<double>& xyTipPosTarget,
-                          std::queue< std::vector<double> >& aveLinearVel,
-                          std::deque< std::vector<double> >& linearVelFromLink,
-                          const double* desired_vel,
-                          const double* tipPlacementK,
+void getAverageLinearVel(std::queue< std::array<double,2> >& aveLinearVel,
+                         const std::deque< std::array<double,3> >& linearVelFromLink);
+
+void targetXYTipPlacement(std::array<double,2>& xyTipPosTarget,
+                          std::queue< std::array<double,2> >& aveLinearVel,
+                          const std::deque< std::array<double,3> >& linearVelFromLink,
+                          const std::array<double,2>& desired_vel,
+                          const std::array<double,3>& tipPlacementK,
                           bool fixPitch);
 
-void xyTipPlacementInControl_main(std::vector<double>& xyTipPos,
-                                  const std::vector<double>& xyTipPosTarget);
-
-void xyTipPlacementInControl_switch(std::vector<double>& xyTipPos,
-                                    std::vector<double>& xyTipPosTarget,
-                                    std::queue< std::vector<double> >& aveLinearVel,
-                                    std::deque< std::vector<double> >& linearVelFromLink,
-                                    const double* desired_vel,
-                                    const double* tipPlacementK);
+void xyTipPlacementInControl_main(std::array<double,2>& xyTipPos,
+                                  const std::array<double,2>& xyTipPosTarget);
 
 void update_control(bool& prevRightStandControl,
                     std::vector<double>& commands, 
-                    std::vector<double>& xyTipPos, 
-                    std::vector<double>& xyTipPosTarget,
-                    std::queue< std::vector<double> >& aveLinearVel, 
-                    std::deque< std::vector<double> >& linearVelFromLink,
+                    std::array<double,2>& xyTipPos, 
+                    std::array<double,2>& xyTipPosTarget,
+                    std::queue< std::array<double,2> >& aveLinearVel, 
+                    const std::deque< std::array<double,3> >& linearVelFromLink,
                     const bool stop,
                     const std::vector<double>& rpyImu, 
                     const ros::Time& time,
@@ -46,17 +42,17 @@ void getVel(std::vector<double>& cumuVel,
                  const std::deque<uint64_t>& time_ms);
 
 
-void linksAngleAndVel(std::vector<double>& linksAngWithVert, 
-                      std::vector<double>& linksAngVel, 
+void linksAngleAndVel(std::array< std::array<double,3> ,2>& linksAngWithVert, 
+                      std::array< std::array<double,3> ,2>& linksAngVel, 
                       const std::vector<double>& jointPos, 
                       const std::vector<double>& jointVel,
                       const std::vector<double>& rpyImu,
                       const std::vector<double>& rpyVel);
 
-void legTipForce(std::vector<double>& tipForce, 
-                 const std::vector<double>& linksAngWithBase, 
+void legTipForce(std::array< std::array<double,2> ,2>& tipForce, 
+                 const std::array< std::array<double,3> ,2>& linksAngWithVert, 
                  const std::vector<double>& jointPos, 
-                 const std::vector<double>& springCoef);
+                 const std::array<double,2>& springCoef);
 
 void singleSupportSwitch(bool& swang,
                          unsigned int& walkingState, 
@@ -66,12 +62,13 @@ void doubleSupportSwitch(unsigned int& walkingState,
                          bool rightToSwing, 
                          double phaseSwitchConst);
 
-void rightStandForLinearVel(bool& rightStand, const std::vector<double>& tipForce);
+void rightStandForLinearVel(bool& rightStand, 
+                            const std::array< std::array<double,2> ,2>& tipForce);
 
-void getLinearVelFromLink(std::deque< std::vector<double> >& linearVelFromLink, 
+void getLinearVelFromLink(std::deque< std::array<double,3> >& linearVelFromLink, 
                            const bool& rightStand,
-                           const std::vector<double>& linksAngWithVert,
-                           const std::vector<double>& linksAngVel);
+                           const std::array< std::array<double,3> ,2>& linksAngWithVert,
+                           const std::array< std::array<double,3> ,2>& linksAngVel);
 
 void update_control_free(bool& prevRightStandControl,
                     bool& swang,
@@ -79,15 +76,15 @@ void update_control_free(bool& prevRightStandControl,
                     double* targetPitch,
                     double* controlPitch,
                     std::vector<double>& commands, 
-                    std::vector<double>& xyTipPos, 
-                    std::vector<double>& xyTipPosTarget,
-                    std::queue< std::vector<double> >& aveLinearVel, 
-                    std::deque< std::vector<double> >& linearVelFromJoint,
+                    std::array<double,2>& xyTipPos, 
+                    std::array<double,2>& xyTipPosTarget,
+                    std::queue< std::array<double,2> >& aveLinearVel, 
+                    const std::deque< std::array<double,3> >& linearVelFromLink,
                     const bool stop, 
                     const int loop_count_,
                     const std::vector<double>& rpyImu, 
                     const std::vector<double>& rpyVel,
-                    const std::vector<double>& linksAngWithVert,
+                    const std::array< std::array<double,3> ,2>& linksAngWithVert,
                     const ros::Time& time,
                     const double startControlTime);
 

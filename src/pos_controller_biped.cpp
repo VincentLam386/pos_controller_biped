@@ -57,23 +57,18 @@ namespace pos_controller_biped_ns
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
   GrpPosController::GrpPosController(): loop_count_(0), max_torque(35.0), swang(false), walkingState(0){
-    linearAcc.reserve(3);
     rpyImu.reserve(3);
     rpyVel.reserve(3);
     for(unsigned int i=0;i<3;++i){
-      linearAcc.push_back(0.0);
       rpyImu.push_back(0.0);
       rpyVel.push_back(0.0);
     }
 
-    xyTipPos.reserve(2);
-    xyTipPosTarget.reserve(2);
-    for(unsigned int i=0;i<2;++i){
-      xyTipPos.push_back(0.0);
-      xyTipPosTarget.push_back(0.0);
-    }
-   
-    //aveLinearVel.reserve(2);
+    std::array<double,2> zeroArray2 = {0.0,0.0};
+    tipForce = {zeroArray2,zeroArray2};
+    std::array<double,3> zeroArray3 = {0.0,0.0,0.0};
+    linksAngWithVert = {zeroArray3,zeroArray3};
+    linksAngVel = {zeroArray3,zeroArray3};
 
   }
   GrpPosController::~GrpPosController() {sub_command_.shutdown();}
@@ -82,15 +77,11 @@ namespace pos_controller_biped_ns
   {
     prevRightStandControl = false;
 
-    rpyImu.reserve(3);
-
     hardware_interface::EffortJointInterface* eff = robot_hw->get<hardware_interface::EffortJointInterface>();
     hardware_interface::ImuSensorInterface* imu = robot_hw->get<hardware_interface::ImuSensorInterface>();
 
     // Set up spring coefficient
-    springCoef.reserve(2);
-    springCoef.push_back(154.6986);
-    springCoef.push_back(143.2394);
+    springCoef = {154.6986, 143.2394};
     
     //IMU Portion
     const std::vector<std::string>& sensor_names = imu->getNames();
