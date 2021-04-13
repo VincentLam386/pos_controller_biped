@@ -57,7 +57,7 @@
 #include <valarray>
 #include <deque>
 #include <queue>
-
+#include <array>
 
 
 namespace pos_controller_biped_ns
@@ -119,12 +119,12 @@ private:
   std::vector<double> truejointVel; // size of 10
   std::vector<double> jointPos; // size of 10
   std::vector<double> jointVel; // size of 10
-  std::vector<double> linksAngWithVert; // size of 6 (left 3 (miu, niu, abad), right 3)
-  std::vector<double> linksAngVel; // size of 6 (left 3, right 3)
+  std::array< std::array<double,3> ,2> linksAngWithVert; // size of 3,2 (left 3 (miu, niu, abad), right 3)
+  std::array< std::array<double,3> ,2> linksAngVel; // size of 3,2 (left 3, right 3)
 
-  std::vector<double> springCoef; // size of 2 (front, rear)
+  std::array<double,2> springCoef; // size of 2 (front, rear)
 
-  std::vector<double> tipForce; // size of 4 (left (x,y), right (x,y))
+  std::array< std::array<double,2> ,2> tipForce; // size of 2,2 (left (x,y), right (x,y))
   bool swang;
   
   std::deque< std::vector<double> > jointPosCummulative; // size of 15
@@ -134,13 +134,11 @@ private:
   std::vector<double> rpyImu; // size of 3
   std::vector<double> rpyVel; // size of 3
 
-  std::vector<double> linearAcc; // size of 3
+  std::deque< std::array<double,3> > linearVelFromLink;
+  std::queue< std::array<double,2> > aveLinearVel;
 
-  std::deque< std::vector<double> > linearVelFromLink;
-  std::queue< std::vector<double> > aveLinearVel;
-
-  std::vector<double> xyTipPos; // size of 2 (x and y)
-  std::vector<double> xyTipPosTarget; // size of 2 (x and y)
+  std::array<double,2> xyTipPos; // size of 2 (x and y)
+  std::array<double,2> xyTipPosTarget; // size of 2 (x and y)
 
   bool prevRightStandControl; 
 
