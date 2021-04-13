@@ -99,18 +99,12 @@ public:
 private:
   const double PI = 3.1415926535;
   int loop_count_;
-  //int updateAcc = 10;
-  ros::Time lastTime;
   ros::Time curTime;
   ros::Time startTime;
-  ros::Duration dur;
-  double dur_t;
   std::deque<uint64_t> time_ms;
-  double niu;
   bool rightStand;
-  bool rightStandControl;
-  bool dropping;
-  bool startTouch;
+  bool timeUpdated;
+  unsigned int walkingState;
   
   double max_torque;
   ros::Subscriber sub_command_;
@@ -125,35 +119,39 @@ private:
   std::vector<double> truejointVel; // size of 10
   std::vector<double> jointPos; // size of 10
   std::vector<double> jointVel; // size of 10
-  std::vector<double> linksAngWithBase; // size of 6 (left 3 (miu, niu, abad), right 3)
-  std::vector<double> linksVel; // size of 6 (left 3, right 3)
+  std::vector<double> linksAngWithVert; // size of 6 (left 3 (miu, niu, abad), right 3)
+  std::vector<double> linksAngVel; // size of 6 (left 3, right 3)
 
   std::vector<double> springCoef; // size of 2 (front, rear)
 
   std::vector<double> tipForce; // size of 4 (left (x,y), right (x,y))
+  bool swang;
   
   std::deque< std::vector<double> > jointPosCummulative; // size of 15
+  std::deque< std::vector<double> > rpyCummulative; // size of 15
 
   std::vector<hardware_interface::ImuSensorHandle> sensors_;
   std::vector<double> rpyImu; // size of 3
+  std::vector<double> rpyVel; // size of 3
+
   std::vector<double> linearAcc; // size of 3
 
-  //std::vector<double> linearVelFromJoint; // size of 3
-  std::deque< std::vector<double> > linearVelFromJoint;
+  std::deque< std::vector<double> > linearVelFromLink;
   std::queue< std::vector<double> > aveLinearVel;
-  //std::vector<double> prevLinearVelFromJoint; // size of 3
 
   std::vector<double> xyTipPos; // size of 2 (x and y)
   std::vector<double> xyTipPosTarget; // size of 2 (x and y)
 
-  bool prevRightStandControl; // temporary
+  bool prevRightStandControl; 
 
-  double prevVel;
+  double targetPitch[2] = { 0.0, 0.0 }; // left, right
+  double controlPitch[2] = { 0.0, 0.0 }; // left, right
 
-  std::vector<double> currentExt;
-  double targetExt;
+  double springStancePid[3] = { 400.0, 0.0, 0.1 };
+  double springSwingPid[3] = { 400.0, 0.0, 0.1 };
+  double abadStancePid[3] = { 200.0, 0.01, 1.2 };
+  double abadSwingPid[3] = { 200.0, 0.01, 1.2 };
 
-  //std::vector<double> linearDisFromAcc; // size of 3
 
 }; // class
 
