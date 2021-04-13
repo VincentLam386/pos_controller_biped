@@ -104,6 +104,7 @@ private:
   std::deque<uint64_t> time_ms;
   bool rightStand;
   bool timeUpdated;
+  unsigned int walkingState;
   
   double max_torque;
   ros::Subscriber sub_command_;
@@ -124,6 +125,7 @@ private:
   std::vector<double> springCoef; // size of 2 (front, rear)
 
   std::vector<double> tipForce; // size of 4 (left (x,y), right (x,y))
+  bool swang;
   
   std::deque< std::vector<double> > jointPosCummulative; // size of 15
   std::deque< std::vector<double> > rpyCummulative; // size of 15
@@ -140,7 +142,15 @@ private:
   std::vector<double> xyTipPos; // size of 2 (x and y)
   std::vector<double> xyTipPosTarget; // size of 2 (x and y)
 
-  bool prevRightStandControl; // temporary
+  bool prevRightStandControl; 
+
+  double targetPitch[2] = { 0.0, 0.0 }; // left, right
+  double controlPitch[2] = { 0.0, 0.0 }; // left, right
+
+  double springStancePid[3] = { 400.0, 0.0, 0.1 };
+  double springSwingPid[3] = { 400.0, 0.0, 0.1 };
+  double abadStancePid[3] = { 200.0, 0.01, 1.2 };
+  double abadSwingPid[3] = { 200.0, 0.01, 1.2 };
 
 
 }; // class

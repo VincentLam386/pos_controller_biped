@@ -56,22 +56,18 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-  GrpPosController::GrpPosController(): loop_count_(0), max_torque(35.0){
+  GrpPosController::GrpPosController(): loop_count_(0), max_torque(35.0), swang(false), walkingState(0){
     linearAcc.reserve(3);
-    //linearVelFromAcc.reserve(3);
-    //linearVelFromLink.reserve(3);
-    //prevLinearVelFromLink.reserve(3);
-    //linearDisFromAcc.reserve(3);
-    xyTipPos.reserve(2);
-    xyTipPosTarget.reserve(2);
-
+    rpyImu.reserve(3);
+    rpyVel.reserve(3);
     for(unsigned int i=0;i<3;++i){
       linearAcc.push_back(0.0);
-      //linearVelFromAcc.push_back(0.0);
-      //linearVelFromLink.push_back(0.0);
-      //prevLinearVelFromLink.push_back(0.0);
-      //linearDisFromAcc.push_back(0.0);
+      rpyImu.push_back(0.0);
+      rpyVel.push_back(0.0);
     }
+
+    xyTipPos.reserve(2);
+    xyTipPosTarget.reserve(2);
     for(unsigned int i=0;i<2;++i){
       xyTipPos.push_back(0.0);
       xyTipPosTarget.push_back(0.0);
@@ -286,7 +282,7 @@ namespace pos_controller_biped_ns
 
     /*--------------------------------------------------------------------------------------*/
     // Get the angle position and velocity of the motor in world frame
-    linksAngleAndVel(linksAngWithVert,linksAngVel,  jointPos,jointVel);
+    linksAngleAndVel(linksAngWithVert,linksAngVel,  jointPos,jointVel, rpyImu,rpyVel);
 
     /*--------------------------------------------------------------------------------------*/
     // Get leg tip force in world frame
@@ -304,6 +300,22 @@ namespace pos_controller_biped_ns
     bool stop = ((curTime-startTime).toSec()) < interval;
 
     update_control(prevRightStandControl, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromLink, stop, rpyImu, time, startTime.toSec()+interval);
+
+    // Uncomment below for free pitch control
+/*
+    bool temp = prevRightStandControl;
+    update_control_free(prevRightStandControl, swang, walkingState, targetPitch, controlPitch, commands,  xyTipPos,  xyTipPosTarget, aveLinearVel, linearVelFromLink, stop, loop_count_, rpyImu, rpyVel, linksAngWithVert, time, startTime.toSec()+interval);
+
+    // Change PID parameters based on stance or swing phase
+    if(temp != prevRightStandControl){
+      pid_controllers_[prevRightStandControl].setGains(abadStancePid[0],abadStancePid[1], abadStancePid[2],0.0,0.0,false);
+      pid_controllers_[(prevRightStandControl+1)%2].setGains(abadSwingPid[0], abadSwingPid[1], abadSwingPid[2], 0.0,0.0,false);
+      pid_controllers_[prevRightStandControl*4+2].setGains(springStancePid[0], springStancePid[1], springStancePid[2], 0.0,0.0,false);
+      pid_controllers_[prevRightStandControl*4+3].setGains(springStancePid[0], springStancePid[1], springStancePid[2], 0.0,0.0,false);
+      pid_controllers_[((prevRightStandControl+1)%2)*4+2].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
+      pid_controllers_[((prevRightStandControl+1)%2)*4+3].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
+    }
+*/
 
     /*--------------------------------------------------------------------------------------*/
     for(unsigned int i=0; i<n_joints_; i++)
