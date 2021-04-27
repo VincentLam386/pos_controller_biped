@@ -19,9 +19,13 @@ void targetXYTipPlacement(std::array<double,2>& xyTipPosTarget,
                           bool fixPitch);
 
 void xyTipPlacementInControl_main(std::array<double,2>& xyTipPos,
-                                  const std::array<double,2>& xyTipPosTarget);
+                                  const std::array<double,2>& xyTipPosTarget,
+                                  double maxStep );
+
+double velStepCal(long period, const std::array<double,2> & xyTipPosTarget);
 
 void update_control(bool& prevRightStandControl,
+                    double& velStep,
                     std::vector<double>& commands, 
                     std::array<double,2>& xyTipPos, 
                     std::array<double,2>& xyTipPosTarget,
@@ -75,8 +79,10 @@ void getLinearVelFromLink(std::deque< std::array<double,3> >& linearVelFromLink,
 void update_control_free(bool& prevRightStandControl,
                     bool& swang,
                     unsigned int& walkingState,
+                    double& phaseSwitchConst,
                     double* targetPitch,
                     double* controlPitch,
+                    std::array<double,4>& controlStandAngle,
                     std::vector<double>& commands, 
                     std::array<double,2>& xyTipPos, 
                     std::array<double,2>& xyTipPosTarget,
@@ -89,5 +95,7 @@ void update_control_free(bool& prevRightStandControl,
                     const std::array< std::array<double,3> ,2>& linksAngWithVert,
                     const ros::Time& time,
                     const double startControlTime);
+
+void writeToFile(std::string msg);
 
 

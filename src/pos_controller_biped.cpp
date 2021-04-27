@@ -56,7 +56,7 @@ namespace pos_controller_biped_ns
  * Subscribes to:
  * - \b command (std_msgs::Float64MultiArray) : The joint efforts to apply
  */
-  GrpPosController::GrpPosController(): loop_count_(0), max_torque(35.0), swang(false), walkingState(0){
+  GrpPosController::GrpPosController(): loop_count_(0), max_torque(35.0), swang(false), walkingState(0), phaseSwitchConst(0.0), velStep(0.0){
     rpyImu.reserve(3);
     rpyVel.reserve(3);
     for(unsigned int i=0;i<3;++i){
@@ -162,6 +162,13 @@ namespace pos_controller_biped_ns
 
   void GrpPosController::starting(const ros::Time& time)
   {
+
+    std::ofstream myfile("test.txt", std::ios::out | std::ios::trunc);
+    if(myfile.is_open()){
+      myfile << "";
+    }
+    else std::cout << "Unable to open file" << std::endl;
+
     curTime = ros::Time::now();
     startTime = ros::Time::now();
     //std::cout << "Number of joints: " << n_joints_ << std::endl;
@@ -173,6 +180,10 @@ namespace pos_controller_biped_ns
       enforceJointLimits(current_positions[i], i);
       pid_controllers_[i].reset();
     }
+    pid_controllers_[2].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
+    pid_controllers_[3].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
+    pid_controllers_[6].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
+    pid_controllers_[7].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
     commands_buffer_.initRT(current_positions);
   }
 
@@ -290,22 +301,12 @@ namespace pos_controller_biped_ns
     double interval = 0.2;
     bool stop = ((curTime-startTime).toSec()) < interval;
 
-    update_control(prevRightStandControl, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromLink, stop, rpyImu, time, startTime.toSec()+interval);
+    update_control(prevRightStandControl, velStep, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromLink, stop, rpyImu, time, startTime.toSec()+interval);
 
     // Uncomment below for free pitch control
 /*
     bool temp = prevRightStandControl;
-    update_control_free(prevRightStandControl, swang, walkingState, targetPitch, controlPitch, commands,  xyTipPos,  xyTipPosTarget, aveLinearVel, linearVelFromLink, stop, loop_count_, rpyImu, rpyVel, linksAngWithVert, time, startTime.toSec()+interval);
-
-    // Change PID parameters based on stance or swing phase
-    if(temp != prevRightStandControl){
-      pid_controllers_[prevRightStandControl].setGains(abadStancePid[0],abadStancePid[1], abadStancePid[2],0.0,0.0,false);
-      pid_controllers_[(prevRightStandControl+1)%2].setGains(abadSwingPid[0], abadSwingPid[1], abadSwingPid[2], 0.0,0.0,false);
-      pid_controllers_[prevRightStandControl*4+2].setGains(springStancePid[0], springStancePid[1], springStancePid[2], 0.0,0.0,false);
-      pid_controllers_[prevRightStandControl*4+3].setGains(springStancePid[0], springStancePid[1], springStancePid[2], 0.0,0.0,false);
-      pid_controllers_[((prevRightStandControl+1)%2)*4+2].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
-      pid_controllers_[((prevRightStandControl+1)%2)*4+3].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
-    }
+    update_control_free(prevRightStandControl, swang, walkingState, phaseSwitchConst, targetPitch, controlPitch, controlStandAngle, commands,  xyTipPos,  xyTipPosTarget, aveLinearVel, linearVelFromLink, stop, loop_count_, rpyImu, rpyVel, linksAngWithVert, time, startTime.toSec()+interval);
 */
 
     /*--------------------------------------------------------------------------------------*/
@@ -344,6 +345,29 @@ namespace pos_controller_biped_ns
         // time step size.
         commanded_effort = pid_controllers_[i].computeCommand(error, period);
 
+/*
+        if(i==2){
+          double stanceEffort = springStancePid[0]*(controlStandAngle[0]-current_position) + 
+                                springStancePid[2]*(0-jointVel[i]);
+          commanded_effort = (1-phaseSwitchConst)*commanded_effort + 
+                             (phaseSwitchConst)*stanceEffort; 
+        } else if(i==3){
+          double stanceEffort = springStancePid[0]*(controlStandAngle[1]-current_position) + 
+                                springStancePid[2]*(0-jointVel[i]);
+          commanded_effort = (1-phaseSwitchConst)*commanded_effort + 
+                             (phaseSwitchConst)*stanceEffort; 
+        } else if(i==6){
+          double stanceEffort = springStancePid[0]*(controlStandAngle[2]-current_position) + 
+                                springStancePid[2]*(0-jointVel[i]);
+          commanded_effort = (phaseSwitchConst)*commanded_effort + 
+                             (1-phaseSwitchConst)*stanceEffort; 
+        } else if(i==7){
+          double stanceEffort = springStancePid[0]*(controlStandAngle[3]-current_position) + 
+                                springStancePid[2]*(0-jointVel[i]);
+          commanded_effort = (phaseSwitchConst)*commanded_effort + 
+                             (1-phaseSwitchConst)*stanceEffort; 
+        }
+*/
         // Make sure the commanded torque is within allowable range
         commanded_effort = std::max(-max_torque, std::min(max_torque, commanded_effort));
 

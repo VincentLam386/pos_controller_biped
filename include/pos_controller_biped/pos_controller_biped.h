@@ -59,6 +59,10 @@
 #include <queue>
 #include <array>
 
+#include <iostream>
+#include <fstream>
+#include <string>
+
 
 namespace pos_controller_biped_ns
 {
@@ -105,6 +109,7 @@ private:
   bool rightStand;
   bool timeUpdated;
   unsigned int walkingState;
+  double velStep;
   
   double max_torque;
   ros::Subscriber sub_command_;
@@ -137,18 +142,21 @@ private:
   std::deque< std::array<double,3> > linearVelFromLink;
   std::queue< std::array<double,2> > aveLinearVel;
 
-  std::array<double,2> xyTipPos; // size of 2 (x and y)
-  std::array<double,2> xyTipPosTarget; // size of 2 (x and y)
+  std::array<double,2> xyTipPos = {0.0,0.0}; // size of 2 (x and y)
+  std::array<double,2> xyTipPosTarget = {0.0,0.0}; // size of 2 (x and y)
 
   bool prevRightStandControl; 
 
   double targetPitch[2] = { 0.0, 0.0 }; // left, right
   double controlPitch[2] = { 0.0, 0.0 }; // left, right
 
-  double springStancePid[3] = { 400.0, 0.0, 0.1 };
+  double springStancePid[3] = { 50.0, 0.0, 0.1 };
   double springSwingPid[3] = { 400.0, 0.0, 0.1 };
   double abadStancePid[3] = { 200.0, 0.01, 1.2 };
   double abadSwingPid[3] = { 200.0, 0.01, 1.2 };
+
+  std::array<double,4> controlStandAngle = {0.0,0.0, 0.0,0.0}; // left(miu,niu), right(miu,niu)
+  double phaseSwitchConst;
 
 
 }; // class

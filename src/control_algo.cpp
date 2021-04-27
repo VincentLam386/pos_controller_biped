@@ -51,8 +51,8 @@ void targetXYTipPlacement(std::array<double,2>& xyTipPosTarget,
   std::array<double,2> curVel = aveLinearVel.back();  
   for(unsigned int i=0; i<2; ++i){
     xyTipPosTarget[i] = boolToSgn(fixPitch)*tipPlacementK[0]*(desired_vel[i]-curVel[i]) + 
-                        tipPlacementK[1]*(curVel[i]-aveLinearVel.front()[i]) +
-                        tipPlacementK[2]*curVel[i] - 0.012;
+                        boolToSgn(fixPitch)*tipPlacementK[1]*(curVel[i]-aveLinearVel.front()[i]) +
+                        tipPlacementK[2]*curVel[i];
   } // for
 
   // Apply limit to target leg tip position
@@ -64,16 +64,24 @@ void targetXYTipPlacement(std::array<double,2>& xyTipPosTarget,
 /*----------------------------------------------------------------------------------------------*/
 
 void xyTipPlacementInControl_main(std::array<double,2>& xyTipPos,
-                                  const std::array<double,2>& xyTipPosTarget){
+                                  const std::array<double,2>& xyTipPosTarget,
+                                  double maxStep = 0.00064){
   /*
   Move the leg tip progressively until it reach the target leg tip position when not switching leg
   */
 
-  double maxStep = 0.0005;  // fix pitch
+  //double maxStep = 0.0005;  // fix pitch
+  //double maxStep = 0.0007;
   //double maxStep = 0.001;  // free pitch
+  //std::cout << maxStep << " ";
+  // 0.5: 0.0064
+  // 0.25: 0.0032
 
   for(unsigned int i=0; i<xyTipPos.size(); ++i){
     double err = xyTipPos[i] - xyTipPosTarget[i];
+
+    //writeToFile( std::to_string(err) + " ");
+
     if(err > 0){  
       xyTipPos[i] -= std::min(err,maxStep);
     } // if true
@@ -87,8 +95,15 @@ void xyTipPlacementInControl_main(std::array<double,2>& xyTipPos,
 
 /*----------------------------------------------------------------------------------------------*/
 
+double velStepCal(long period, const std::array<double,2> & xyTipPosTarget){
+  return (xyTipPosTarget[0] * 2 * 1.15 / period);
+}
+
+/*----------------------------------------------------------------------------------------------*/
+
 // Implement the control algorithm here
 void update_control(bool& prevRightStandControl,
+                    double& velStep,
                     std::vector<double>& commands, 
                     std::array<double,2>& xyTipPos, 
                     std::array<double,2>& xyTipPosTarget,
@@ -102,7 +117,7 @@ void update_control(bool& prevRightStandControl,
   const double stepFrequency = 3;
   const double PI = 3.14159;
   const double maxAngle = 45.0 *(PI/180.0);
-  const double leg_0 = 0.47;     //neutral length of leg
+  const double leg_0 = 0.5;     //neutral length of leg
   const double leg_maxRet = 0.1; //max retraction length of the leg
   const double angle_0 = acos((leg_0/2)/(0.26)) - PI/6;
 
@@ -113,12 +128,14 @@ void update_control(bool& prevRightStandControl,
   std::array<double,4> controlAngle = {0.0,0.0, 0.0,0.0}; // left(miu,niu), right(miu,niu)
 
   std::array<double,2> desired_vel = { 0.5,0.0 };  // x direction, y direction
-  std::array<double,3> tipPlacementK = { 0.18, 0.01, 0.18 }; // kp, kd, kv
+  //std::array<double,3> tipPlacementK = { 0.25, 0.0, 0.225 }; // kp, kd, kv
+  std::array<double,3> tipPlacementK = { 0.3, 0.05, 0.225 }; // kp, kd, kv
 
   // Get the current actual hip pitch angles from IMU
   float pitchToFront = rpyImu[1];
 
   if(!stop){
+    std::cout << time.toSec() << " ";
     if((retractionLength < 0) != prevRightStandControl){
       // Switch phase control
       targetXYTipPlacement(xyTipPosTarget, aveLinearVel, linearVelFromLink, desired_vel, tipPlacementK,true);
@@ -126,13 +143,16 @@ void update_control(bool& prevRightStandControl,
       for(unsigned int i=0; i<xyTipPos.size(); ++i){
         xyTipPos[i] *= -1;
       } // for
+      velStep = velStepCal(1000.0 / stepFrequency, xyTipPosTarget);
 
     } // if true
     else {
       // Normal control
+     // xyTipPlacementInControl_main(xyTipPos, xyTipPosTarget, velStep);
       xyTipPlacementInControl_main(xyTipPos, xyTipPosTarget);
 
     } // else
+    std::cout << xyTipPosTarget[0] << " " << xyTipPos[0] << " ";
 
     targetLegLength[0] = leg_0 + std::min(0.0,retractionLength);
     targetLegLength[1] = leg_0 - std::max(0.0,retractionLength);
@@ -351,12 +371,13 @@ void doubleSupportSwitch(unsigned int& walkingState,
 
 void rightStandForLinearVel(bool& rightStand, 
                             const std::array< std::array<double,2> ,2>& tipForce){
-  double startSwingForceThreshold = 5.0;
+  double startSwingForceThreshold = 0.0;
   if(rightStand){
     rightStand = ((tipForce[1][1] < startSwingForceThreshold) + 1)%2;
   } else {
     rightStand = tipForce[0][1] < startSwingForceThreshold;
   }
+  writeToFile( std::to_string(tipForce[0][1]) + " " + std::to_string(tipForce[1][1]) + " ");
 
   return;
 }
@@ -384,7 +405,7 @@ void getLinearVelFromLink(std::deque< std::array<double,3> >& linearVelFromLink,
   curLinearVelFromLink[0] = (r0*cos(miu) *miu_dot -
                              r0*cos(niu) *niu_dot); 
   // y-direction velocity
-  curLinearVelFromLink[1] = ( -rightStand*
+  curLinearVelFromLink[1] = ( -boolToSgn(rightStand)*
                              (-r0*sin(miu)*sin(lambda) *miu_dot -
                               r0*sin(niu)*sin(lambda) *niu_dot +
                              (r0*(cos(miu)+cos(niu))*cos(lambda)-rb*sin(lambda)) *lambda_dot));
@@ -395,7 +416,10 @@ void getLinearVelFromLink(std::deque< std::array<double,3> >& linearVelFromLink,
 
   linearVelFromLink.push_back(curLinearVelFromLink);
 
-  //std::cout << linearVelFromLink.back()[0] << " " << linearVelFromLink.back()[1] << " " << linearVelFromLink.back()[2] << "" << std::endl;
+  std::cout << linearVelFromLink.back()[0] << " " << linearVelFromLink.back()[1] << " " << linearVelFromLink.back()[2] << "" << std::endl;
+  //std::cout << rightStand << std::endl;
+  writeToFile( std::to_string(linearVelFromLink.back()[0]) + " ");
+  
   
   if(linearVelFromLink.size() > 10){
     linearVelFromLink.pop_front();
@@ -406,8 +430,10 @@ void getLinearVelFromLink(std::deque< std::array<double,3> >& linearVelFromLink,
 void update_control_free(bool& prevRightStandControl,
                     bool& swang,
                     unsigned int& walkingState,
+                    double& phaseSwitchConst,
                     double* targetPitch,
                     double* controlPitch,
+                    std::array<double,4>& controlStandAngle,
                     std::vector<double>& commands, 
                     std::array<double,2>& xyTipPos, 
                     std::array<double,2>& xyTipPosTarget,
@@ -430,15 +456,14 @@ void update_control_free(bool& prevRightStandControl,
  
   const double retractionLength = leg_maxRet * sin(2*PI*(stepFrequency/2.0)* (time.toSec() - startControlTime));
   const double phaseSwitchParam = 2;
-  const double phaseSwitchConst = std::min( 0.5, std::max(retractionLength/leg_maxRet* phaseSwitchParam, -0.5)) +0.5;
+  phaseSwitchConst = std::min( 0.5, std::max(retractionLength/leg_maxRet* phaseSwitchParam, -0.5)) +0.5;
 
   std::array<double,2> targetLegLength = {0.0, 0.0}; // left, right
   std::array<double,2> targetLegAngle =  {0.0,0.0}; // left, right
   std::array<double,4> controlAngle = {0.0,0.0, 0.0,0.0}; // left(miu,niu), right(miu,niu)
-  std::array<double,4> controlStandAngle = { 0.0,0.0,0.0,0.0 }; // left(miu,niu), right(miu,niu)
 
   std::array<double,2> desired_vel = { 0.0,0.0 };  // x direction, y direction
-  std::array<double,3> tipPlacementK = { 0.18, 0.0, 0.18 }; // kp, kd, kv
+  std::array<double,3> tipPlacementK = { 0.08, 0.0, 0.08 }; // kp, kd, kv
   std::array<double,2> pitchK = { 13.3, 1.33 }; // kp, kv
   double springAveK = 145.0;
 
@@ -473,9 +498,13 @@ void update_control_free(bool& prevRightStandControl,
         else if(pitchErr<0){
           controlPitch[i] += std::min(controlPitchStep[(prevRightStandControl+i)%2], -pitchErr);
         }
+        //writeToFile( std::to_string(controlPitch[i]) + " ");
       }
 
     } // else
+
+    writeToFile( std::to_string(xyTipPosTarget[0]) + " ");
+    writeToFile( std::to_string(xyTipPos[0]) + " ");
   
     if (retractionLength < 0){
       targetLegLength[0] = leg_0 + retractionLength;
@@ -485,51 +514,56 @@ void update_control_free(bool& prevRightStandControl,
       targetLegLength[0] = leg_0;
       targetLegLength[1] = leg_0 - retractionLength;
     } // else
-/*
+
     switch(walkingState) {
       case 0: // Double support (right = flight, left = stance)
-        controlAngle[0] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[0] - linksAngWithVert[1] );
-        controlAngle[2] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[3] - linksAngWithVert[4] );
+        controlAngle[0] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[0][0] - linksAngWithVert[0][1] );
+        controlAngle[2] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[1][0] - linksAngWithVert[1][1] );
         doubleSupportSwitch(walkingState,true, phaseSwitchConst);
         break;
 
       case 1: // Left leg single support (right = flight, left = stance)
-        controlAngle[0] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[0] - linksAngWithVert[1] );
+        controlAngle[0] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[0][0] - linksAngWithVert[0][1] );
         controlAngle[2] = -asin(xyTipPos[0]/targetLegLength[1]) - controlPitch[1];
         singleSupportSwitch(swang, walkingState, phaseSwitchConst);
         break;
 
       case 2: // Double support (right = stance, left = flight)
-        controlAngle[0] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[0] - linksAngWithVert[1] );
-        controlAngle[2] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[3] - linksAngWithVert[4] );
+        controlAngle[0] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[0][0] - linksAngWithVert[0][1] );
+        controlAngle[2] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[1][0] - linksAngWithVert[1][1] );
         doubleSupportSwitch(walkingState,false, phaseSwitchConst);
         break;
 
       case 3: // Single support (right = stance, left = flight)
         controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]) - controlPitch[0];
         std::cout << xyTipPos[0] << " " << controlPitch[0] << std::endl;
-        controlAngle[2] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[3] - linksAngWithVert[4] );
+        controlAngle[2] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[1][0] - linksAngWithVert[1][1] );
         singleSupportSwitch(swang, walkingState, phaseSwitchConst);
         break;
     }
 
-    std::cout << walkingState << std::endl;
+    //std::cout << walkingState << std::endl;
 
     controlAngle[1] = -controlAngle[0];
     controlAngle[3] = -controlAngle[2];    
-*/
 
+/*
     controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]) - controlPitch[0];
     controlAngle[2] = -asin(xyTipPos[0]/targetLegLength[1]) - controlPitch[1];
 
     controlStandAngle[0] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[0][0] - linksAngWithVert[0][1] );
     controlStandAngle[2] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[1][0] - linksAngWithVert[1][1] );
 
-    controlAngle[0] = controlAngle[0]*(1-phaseSwitchConst) + controlStandAngle[0]*phaseSwitchConst;
-    controlAngle[1] = -controlAngle[0];
-    controlAngle[2] = controlAngle[2]*phaseSwitchConst + controlStandAngle[2]*(1-phaseSwitchConst);
-    controlAngle[3] = -controlAngle[2];
+    //controlAngle[0] = controlAngle[0]*(1-phaseSwitchConst) + controlStandAngle[0]*phaseSwitchConst;
+    //controlAngle[1] = -controlAngle[0];
+    //controlAngle[2] = controlAngle[2]*phaseSwitchConst + controlStandAngle[2]*(1-phaseSwitchConst);
+    //controlAngle[3] = -controlAngle[2];
 
+    controlStandAngle[0] += acos((targetLegLength[0]/2)/(0.26)) - PI/6;
+    controlStandAngle[1] += acos((targetLegLength[0]/2)/(0.26)) - PI/6;
+    controlStandAngle[2] += acos((targetLegLength[1]/2)/(0.26)) - PI/6; 
+    controlStandAngle[3] += acos((targetLegLength[1]/2)/(0.26)) - PI/6; 
+*/
 
     controlAngle[0] += acos((targetLegLength[0]/2)/(0.26)) - PI/6;
     controlAngle[1] += acos((targetLegLength[0]/2)/(0.26)) - PI/6;
@@ -539,7 +573,11 @@ void update_control_free(bool& prevRightStandControl,
     // Apply limit to the joint angle
     for(unsigned int i=0;i<4;++i){
       controlAngle[i] = std::max(-maxAngle,std::min(controlAngle[i], maxAngle));
+      controlStandAngle[i] = std::max(-maxAngle,std::min(controlStandAngle[i], maxAngle));
+      writeToFile( std::to_string(controlAngle[i]) + " ");
     }
+    writeToFile("\n");
+
 
   }
 
@@ -581,5 +619,13 @@ void update_control_free(bool& prevRightStandControl,
   return;
 } // update_control_free
 
+void writeToFile(std::string msg){
+  std::ofstream myfile("test.txt", std::ios::out | std::ios::app);
+  if(myfile.is_open()){
+    myfile << msg;
+  }
+  else std::cout << "Unable to open file" << std::endl;
 
+  return;
+}
 
