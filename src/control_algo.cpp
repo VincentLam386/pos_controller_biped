@@ -240,7 +240,7 @@ void update_control(bool& prevRightStandControl,
   const double stepFrequency = 3;
   const double PI = 3.14159;
   const double maxAngle = 2.0 *(PI/180.0);
-  const double leg_0 = 0.47;     //neutral length of leg
+  const double leg_0 = 0.48;     //neutral length of leg
   const double leg_maxRet = 0.1; //max retraction length of the leg
   const double angle_0 = acos((leg_0/2)/(0.26)) - PI/6;
   //const double angle_0 = 0.0/180*PI;
@@ -336,7 +336,7 @@ void update_control(bool& prevRightStandControl,
     //xyTipPos[0] = 0.0;
 
     //prevRightStandControl = (prevRightStandControl? phaseSwitchConst!=1.0 : phaseSwitchConst==0.0);
-
+/*
     switch(walkingState) {
       case 0: // Double support (right = flight, left = stance)
         controlAngle[0] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[0] - linksAngWithVert[1] );
@@ -365,8 +365,8 @@ void update_control(bool& prevRightStandControl,
     }
     controlAngle[1] = -controlAngle[0];
     controlAngle[3] = -controlAngle[2];    
+*/
 
-/*
     controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]) - controlPitch[0];
     controlAngle[2] = -asin(xyTipPos[0]/targetLegLength[1]) - controlPitch[1];
 
@@ -383,7 +383,7 @@ void update_control(bool& prevRightStandControl,
     controlAngle[1] = -controlAngle[0];
     controlAngle[2] = controlAngle[2]*phaseSwitchConst + controlStandAngle[2]*(1-phaseSwitchConst);
     controlAngle[3] = -controlAngle[2];
-*/
+
 
     //std::cout << controlAngle[0]/PI*180 << " " << controlAngle[1]/PI*180 
     //       << " " << controlAngle[2]/PI*180 << " " << controlAngle[3]/PI*180 << " ";
@@ -805,6 +805,7 @@ void getLinearVelFromJoint(std::deque< std::vector<double> >& linearVelFromJoint
 
   // print height of robot body
   //std::cout << 0.26*(cos(miu)+cos(niu)) << std::endl;
+  writeToFile(std::to_string(0.26*(cos(miu)+cos(niu))) + " ");
 
 }
 
