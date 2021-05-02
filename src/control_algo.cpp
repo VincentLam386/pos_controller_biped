@@ -3,6 +3,10 @@
 #include "ros/ros.h"
 #include <ros/console.h>
 
+int boolToSgn(bool in){
+  return -1+in*2;
+}
+
 void rightStandForControl(bool& rightStandControl, 
                           bool& dropping, 
                           bool& startTouch, 
@@ -240,7 +244,7 @@ void update_control(bool& prevRightStandControl,
   const double stepFrequency = 3;
   const double PI = 3.14159;
   const double maxAngle = 2.0 *(PI/180.0);
-  const double leg_0 = 0.48;     //neutral length of leg
+  const double leg_0 = 0.5;     //neutral length of leg
   const double leg_maxRet = 0.1; //max retraction length of the leg
   const double angle_0 = acos((leg_0/2)/(0.26)) - PI/6;
   //const double angle_0 = 0.0/180*PI;
@@ -273,6 +277,7 @@ void update_control(bool& prevRightStandControl,
   float pitchToFront = rpyImu[1];
 
   if(!stop){
+    //std::cout << pitchToFront << std::endl;
     //if(rightStandControl != prevRightStandControl){
     if((retractionLength < 0) != prevRightStandControl){
       //xyTipPlacementInControl_switch(xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, desired_vel,tipPlacementK);
@@ -331,12 +336,12 @@ void update_control(bool& prevRightStandControl,
       targetLegLength[1] = leg_0 - retractionLength;
 
     } // else
-    //std::cout << targetLegLength[0] << " " << targetLegLength[1] << std::endl;
+    writeToFile( std::to_string(targetLegLength[0]) + " " + std::to_string(targetLegLength[1]) + " ");
 
     //xyTipPos[0] = 0.0;
 
     //prevRightStandControl = (prevRightStandControl? phaseSwitchConst!=1.0 : phaseSwitchConst==0.0);
-/*
+
     switch(walkingState) {
       case 0: // Double support (right = flight, left = stance)
         controlAngle[0] = 0.5*( (pitchK[0]*rpyImu[1]+pitchK[1]*rpyVel[1])/springAveK + linksAngWithVert[0] - linksAngWithVert[1] );
@@ -365,8 +370,8 @@ void update_control(bool& prevRightStandControl,
     }
     controlAngle[1] = -controlAngle[0];
     controlAngle[3] = -controlAngle[2];    
-*/
 
+/*
     controlAngle[0] = -asin(xyTipPos[0]/targetLegLength[0]) - controlPitch[0];
     controlAngle[2] = -asin(xyTipPos[0]/targetLegLength[1]) - controlPitch[1];
 
@@ -389,7 +394,7 @@ void update_control(bool& prevRightStandControl,
     //       << " " << controlAngle[2]/PI*180 << " " << controlAngle[3]/PI*180 << " ";
 
     //std::cout << phaseSwitchConst*5 << " ";
-
+*/
 
 /*
     //std::cout << (-asin(xyTipPos[0]/targetLegLength[0]) - controlPitch[0])/PI*180 << " ";
@@ -674,7 +679,7 @@ void singleSupportSwitch(bool& swang,
         if(phaseSwitchConst > 0 && phaseSwitchConst < 1){
           walkingState = (walkingState+1)%4;
           swang = false;
-          std::cout << "Double now" << std::endl;
+          //std::cout << "Double now" << std::endl;
         }
       } else {
         swang = (phaseSwitchConst == 0.0 || phaseSwitchConst == 1.0);
@@ -702,12 +707,12 @@ void doubleSupportSwitch(unsigned int& walkingState,
       if(rightToSwing){
         if(phaseSwitchConst > 0.6){
           walkingState = (walkingState+1)%4;  
-          std::cout << "Right swing now" << std::endl;
+          //std::cout << "Right swing now" << std::endl;
         }
       } else {
         if(phaseSwitchConst < 0.4){
           walkingState = (walkingState+1)%4;  
-          std::cout << "Left swing now" << std::endl;
+          //std::cout << "Left swing now" << std::endl;
         }
       }
 
@@ -774,7 +779,7 @@ void getLinearVelFromJoint(std::deque< std::vector<double> >& linearVelFromJoint
   curLinearVelFromJoint.push_back(r0*cos(miu) *miu_dot -
                                   r0*cos(niu) *niu_dot); 
   // y-direction velocity
-  curLinearVelFromJoint.push_back( -rightStand*
+  curLinearVelFromJoint.push_back( -boolToSgn(rightStand)*
                                    (-r0*sin(miu)*sin(lambda) *miu_dot -
                                    r0*sin(niu)*sin(lambda) *niu_dot +
                                    (r0*(cos(miu)+cos(niu))*cos(lambda)-rb*sin(lambda)) *lambda_dot));

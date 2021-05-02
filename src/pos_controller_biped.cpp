@@ -339,6 +339,7 @@ namespace pos_controller_biped_ns
     }*/
 
     getLinearVelFromJoint(linearVelFromJoint, rightStand, linksAngWithVert, linksAngVel);
+    std::cout << linearVelFromJoint.back()[0] << " " << linearVelFromJoint.back()[1] << " " << linearVelFromJoint.back()[2] << "" << std::endl;
 
     /*--------------------------------------------------------------------------------------*/
     // Update desired position of links and torque for ABAD motor
@@ -359,14 +360,14 @@ namespace pos_controller_biped_ns
     update_control(prevRightStandControl, swang, walkingState, prevVel, targetExt, targetPitch, controlPitch, currentExt, commands, xyTipPos, xyTipPosTarget, aveLinearVel, linearVelFromJoint, stop, rightStandControl, loop_count_, joints_, rpyImu, rpyVel, linksAngWithVert, jointPos, leftTipYForce,rightTipYForce, time, startTime.toSec()+interval);
 
     // Change PID parameters based on stance or swing phase
-    if(temp != prevRightStandControl){
+    /*if(temp != prevRightStandControl){
       pid_controllers_[prevRightStandControl].setGains(abadStancePid[0],abadStancePid[1], abadStancePid[2],0.0,0.0,false);
       pid_controllers_[(prevRightStandControl+1)%2].setGains(abadSwingPid[0], abadSwingPid[1], abadSwingPid[2], 0.0,0.0,false);
       pid_controllers_[prevRightStandControl*4+2].setGains(springStancePid[0], springStancePid[1], springStancePid[2], 0.0,0.0,false);
       pid_controllers_[prevRightStandControl*4+3].setGains(springStancePid[0], springStancePid[1], springStancePid[2], 0.0,0.0,false);
       pid_controllers_[((prevRightStandControl+1)%2)*4+2].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
       pid_controllers_[((prevRightStandControl+1)%2)*4+3].setGains(springSwingPid[0], springSwingPid[1], springSwingPid[2], 0.0,0.0,false);
-    }
+    }*/
      
 
     /*--------------------------------------------------------------------------------------*/
