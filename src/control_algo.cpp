@@ -152,7 +152,7 @@ void update_control(bool& prevRightStandControl,
       xyTipPlacementInControl_main(xyTipPos, xyTipPosTarget);
 
     } // else
-    std::cout << xyTipPosTarget[0] << " " << xyTipPos[0] << " ";
+    //std::cout << xyTipPosTarget[0] << " " << xyTipPos[0] << " ";
 
     targetLegLength[0] = leg_0 + std::min(0.0,retractionLength);
     targetLegLength[1] = leg_0 - std::max(0.0,retractionLength);
@@ -294,12 +294,12 @@ void linksAngleAndVel(std::array< std::array<double,3> ,2>& linksAngWithVert,
                       const std::vector<double>& rpyVel)
 {
   for(unsigned int i=0; i<2; ++i){
-    linksAngWithVert[i][0] = ( jointPos[4+i*4]+jointPos[2+i*4]+rpyImu[1]+3.14159/6.0 ); // PI/6 comes from xacro definition of the robot // left miu
-    linksAngWithVert[i][1] = ( jointPos[5+i*4]+jointPos[3+i*4]-rpyImu[1]+3.14159/6.0 ); // left niu
-    linksAngWithVert[i][2] = ( jointPos[i] ); // left abad
-    linksAngVel[i][0] = ( jointVel[4+i*4]+jointVel[2+i*4]+rpyVel[1] ); // right miu
-    linksAngVel[i][1] = ( jointVel[5+i*4]+jointVel[3+i*4]-rpyVel[1] ); // right niu
-    linksAngVel[i][2] = ( jointVel[i] ); // right abad
+    linksAngWithVert[i][0] = ( jointPos[4+i*4]+jointPos[2+i*4]+rpyImu[1]+3.14159/6.0 ); // PI/6 comes from xacro definition of the robot // left or right miu
+    linksAngWithVert[i][1] = ( jointPos[5+i*4]+jointPos[3+i*4]-rpyImu[1]+3.14159/6.0 ); // left or right niu
+    linksAngWithVert[i][2] = ( jointPos[i] ); // left or right abad
+    linksAngVel[i][0] = ( jointVel[4+i*4]+jointVel[2+i*4]+rpyVel[1] ); // left or right miu dot
+    linksAngVel[i][1] = ( jointVel[5+i*4]+jointVel[3+i*4]-rpyVel[1] ); // left or right niu dot
+    linksAngVel[i][2] = ( jointVel[i] ); // left or right abad dot
   }
 
   return;
@@ -402,17 +402,19 @@ void getLinearVelFromLink(std::deque< std::array<double,3> >& linearVelFromLink,
   const double lambda_dot = linksAngVel[rightStand][2];
 
   // x-direction velocity
-  curLinearVelFromLink[0] = (r0*cos(miu) *miu_dot -
+  curLinearVelFromLink[0] = (-r0*cos(miu) * (-1*miu_dot) -
                              r0*cos(niu) *niu_dot); 
-  // y-direction velocity
-  curLinearVelFromLink[1] = ( -boolToSgn(rightStand)*
-                             (-r0*sin(miu)*sin(lambda) *miu_dot -
-                              r0*sin(niu)*sin(lambda) *niu_dot +
-                             (r0*(cos(miu)+cos(niu))*cos(lambda)-rb*sin(lambda)) *lambda_dot));
+  // y-direction velocity boolToSgn(rightStand)
+  curLinearVelFromLink[1] = r0*sin(miu)*sin(lambda) *miu_dot +
+                            r0*sin(niu)*sin(lambda) *niu_dot +
+                            (-r0*(cos(miu)+cos(niu))*cos(lambda)
+                              -boolToSgn(rightStand)*rb*sin(lambda))
+			      *lambda_dot;
   // z-direction velocity   
-  curLinearVelFromLink[2] = ( -r0*sin(miu)*cos(lambda) *miu_dot -
-                                   r0*sin(niu)*cos(lambda) *niu_dot +
-                                   (-r0*(cos(miu)+cos(niu))*sin(lambda)-rb*cos(lambda)) *lambda_dot);
+  curLinearVelFromLink[2] =   -r0*sin(miu)*cos(lambda) *miu_dot -
+                              r0*sin(niu)*cos(lambda) *niu_dot -
+                              (r0*(cos(miu)+cos(niu))*sin(lambda)-
+                               boolToSgn(rightStand)*rb*cos(lambda)) *lambda_dot;
 
   linearVelFromLink.push_back(curLinearVelFromLink);
 
